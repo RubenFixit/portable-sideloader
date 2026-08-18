@@ -16,7 +16,7 @@ using System.Reflection;
 //   3. It starts PowerShell with -ExecutionPolicy Bypass, so a .ps1 that arrived from the
 //      internet (Mark-of-the-Web) cannot be blocked from running.
 //
-// Built by build.ps1 with the csc.exe that ships with Windows - no toolchain required.
+// Built by tools\build.ps1 with the csc.exe that ships with Windows - no toolchain required.
 
 internal static class Launcher
 {
@@ -69,31 +69,18 @@ internal static class Launcher
         string staging = Path.Combine(root, "Data", "update");
         if (!Directory.Exists(staging)) return;
 
-        string stagedApp = Path.Combine(staging, "App");
-        if (Directory.Exists(stagedApp))
+        // Every top-level directory in the payload is replaced wholesale, except Data\ which is
+        // yours. Bounded to one level, and self-maintaining: a release that adds a directory is
+        // handled without touching this code again.
+        foreach (string stagedDir in Directory.GetDirectories(staging))
         {
-            string liveApp = Path.Combine(root, "App");
-            string retired = liveApp + ".replaced";
-
-            if (Directory.Exists(retired)) Directory.Delete(retired, true);
-            if (Directory.Exists(liveApp)) Directory.Move(liveApp, retired);
-
-            try
-            {
-                Directory.Move(stagedApp, liveApp);
-            }
-            catch
-            {
-                // Put the old one back rather than leaving the install with no code at all.
-                if (!Directory.Exists(liveApp) && Directory.Exists(retired)) Directory.Move(retired, liveApp);
-                throw;
-            }
-
-            TryQuietly(() => Directory.Delete(retired, true));
-            Console.WriteLine("  applied staged update to App\\");
+            string name = Path.GetFileName(stagedDir);
+            if (string.Equals(name, "Data", StringComparison.OrdinalIgnoreCase)) continue;
+            ReplaceDirectory(stagedDir, Path.Combine(root, name));
+            Console.WriteLine("  applied staged update to " + name + "\\");
         }
 
-        // Loose files at the package root - README, LICENSE, build.ps1 - so an update refreshes
+        // Loose files at the package root - README and LICENSE - so an update refreshes
         // everything except the stub, which needs the rename dance below, and Data\, which is
         // yours and must never be overwritten.
         string stubName = Path.GetFileName(exePath);
@@ -115,6 +102,27 @@ internal static class Launcher
         }
 
         TryQuietly(() => Directory.Delete(staging, true));
+    }
+
+    private static void ReplaceDirectory(string staged, string live)
+    {
+        string retired = live + ".replaced";
+
+        if (Directory.Exists(retired)) Directory.Delete(retired, true);
+        if (Directory.Exists(live)) Directory.Move(live, retired);
+
+        try
+        {
+            Directory.Move(staged, live);
+        }
+        catch
+        {
+            // Put the old one back rather than leaving the install missing a directory entirely.
+            if (!Directory.Exists(live) && Directory.Exists(retired)) Directory.Move(retired, live);
+            throw;
+        }
+
+        TryQuietly(() => Directory.Delete(retired, true));
     }
 
     private static int RunScript(string script, string[] args)

@@ -91,8 +91,8 @@ mechanism this tool applies to every other app.
 
 ```
 portable-sideloader\
-  PortableSideloader.exe    launcher stub (build.ps1)
-  build.ps1
+  PortableSideloader.exe    launcher stub (tools\build.ps1)
+  tools\                    build and release scripts
   App\                      replaced wholesale on update
     sideload.ps1
     config.json             shipped defaults
@@ -112,10 +112,10 @@ which is also how you point two checkouts at one registry.
 ## The launcher stub
 
 ```powershell
-.\build.ps1
+.\tools\build.ps1
 ```
 
-Compiles `PortableSideloader.exe` (~8 KB) using the `csc.exe` that ships with Windows — no SDK, no
+Compiles `PortableSideloader.exe` (~15 KB) using the `csc.exe` that ships with Windows — no SDK, no
 package manager, no admin. Drop the folder into your PortableApps directory and the Platform picks
 up the exe; right-click it and tick **Start Automatically** for prompt-on-launch.
 
