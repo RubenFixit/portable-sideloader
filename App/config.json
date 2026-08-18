@@ -9,6 +9,7 @@
     "timeoutSec": 30,
     "downloadTimeoutSec": 600,
     "staleDays": 180,
+    "autoUpdateSelf": true,
     "bucketCacheHours": 24,
     "userAgent": "portable-sideloader",
     "platformMenuIni": null,

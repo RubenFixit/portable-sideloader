@@ -10,6 +10,7 @@
       show <app>              Everything known about one app, including the upstream version.
       install <name>          Add an app and install it into the PortableApps folder.
       update [app]            Check for updates and apply them, prompting per app.
+      self-update             Check and stage portable-sideloader itself (launcher preflight).
       remove <app>            Uninstall an app and stop managing it.
 
 .EXAMPLE
@@ -30,7 +31,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'update', 'remove',
+    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'update', 'self-update', 'remove',
                  'categorize', 'hold', 'unhold', 'restore', 'help')]
     [string]   $Command = 'help',
 
@@ -767,6 +768,56 @@ function Invoke-Update {
     Write-Host ''
 }
 
+function Invoke-SelfUpdate {
+    param($Manifest, [string]$Root)
+
+    $enabled = [bool](Get-Setting $script:Cfg 'autoUpdateSelf' $null $true)
+    if (-not $enabled) {
+        Write-Host '  self-update disabled by settings.autoUpdateSelf' -ForegroundColor DarkGray
+        return 0
+    }
+
+    $entry = @($Manifest.apps | Where-Object { Test-SelfEntry $_ }) | Select-Object -First 1
+    if (-not $entry) {
+        Write-Host '  no self entry is registered; continuing without self-update' -ForegroundColor DarkGray
+        return 0
+    }
+
+    Write-Head 'checking portable-sideloader itself'
+    $row = Get-AppRow -Entry $entry -Root $Root -Online
+    Write-Row -Row $row -Width $row.App.Length
+
+    if ($row.Status -ne 'UpdateAvailable' -or -not $row.Upstream.Url) {
+        if ($row.Status -eq 'Unknown') {
+            Write-Host "  self-update check failed: $($row.Detail)" -ForegroundColor Yellow
+        }
+        return 0
+    }
+
+    if ($row.Held) {
+        Write-Host '  self-update is held; continuing with the normal update pass' -ForegroundColor Yellow
+        return 0
+    }
+    if ($DryRun) {
+        Write-Host '  -DryRun: self-update would be staged, but nothing was modified.' -ForegroundColor DarkGray
+        return 0
+    }
+
+    Write-Host "  staging portable-sideloader $($row.Installed) -> $($row.Latest)" -ForegroundColor Yellow
+    try {
+        $result = Invoke-AppInstall -Entry $entry -Upstream $row.Upstream -Root $Root -IsUpdate
+        if ($result.Staged) {
+            Write-Host '  self-update staged; the launcher will restart before other updates run' -ForegroundColor Cyan
+            return 42
+        }
+        return 0
+    }
+    catch {
+        Write-Host "  self-update failed: $($_.Exception.Message)" -ForegroundColor Red
+        return 1
+    }
+}
+
 function Invoke-Remove {
     param($Manifest, [string]$Root)
     if (-not $Name) { throw "remove needs an app id, e.g. .\sideload.ps1 remove UserBenchMark" }
@@ -1042,6 +1093,7 @@ switch ($Command) {
     'add'                   { Invoke-Add     -Manifest $manifest -Root $root }
     'install'               { Invoke-Install -Manifest $manifest -Root $root }
     'update'                { Invoke-Update  -Manifest $manifest -Root $root }
+    'self-update'           { exit (Invoke-SelfUpdate -Manifest $manifest -Root $root) }
     'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }
     'categorize'            { Invoke-Categorize -Manifest $manifest -Root $root }
     'hold'                  { Invoke-Hold    -Manifest $manifest -Root $root }

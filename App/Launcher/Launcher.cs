@@ -29,12 +29,19 @@ internal static class Launcher
         string exePath = Assembly.GetExecutingAssembly().Location;
         string root = Path.GetDirectoryName(exePath);
         bool launchedBare = args.Length == 0;
+        bool preflight = launchedBare || (args.Length > 0 &&
+            string.Equals(args[0], "update", StringComparison.OrdinalIgnoreCase));
+        bool resumed = string.Equals(Environment.GetEnvironmentVariable("PORTABLE_SIDELOADER_RESUMED"), "1",
+            StringComparison.Ordinal);
+
+        WaitForParentExit();
 
         TryQuietly(() => CleanupPreviousStub(root));
 
+        bool stagedApplied = false;
         try
         {
-            ApplyStagedUpdate(root, exePath);
+            stagedApplied = ApplyStagedUpdate(root, exePath);
         }
         catch (Exception ex)
         {
@@ -47,6 +54,24 @@ internal static class Launcher
             Console.Error.WriteLine("Cannot find " + script);
             Pause(launchedBare);
             return 2;
+        }
+
+        if (preflight && !stagedApplied && !resumed)
+        {
+            string[] selfArgs = HasArgument(args, "-DryRun")
+                ? new[] { "self-update", "-DryRun" }
+                : new[] { "self-update", "-Yes" };
+            int selfCode = RunScript(script, selfArgs);
+            if (selfCode == 42)
+            {
+                Relaunch(exePath, args);
+                return 0;
+            }
+            if (selfCode != 0)
+            {
+                Pause(launchedBare);
+                return selfCode;
+            }
         }
 
         int exitCode = RunScript(script, args);
@@ -64,10 +89,10 @@ internal static class Launcher
         }
     }
 
-    private static void ApplyStagedUpdate(string root, string exePath)
+    private static bool ApplyStagedUpdate(string root, string exePath)
     {
         string staging = Path.Combine(root, "Data", "update");
-        if (!Directory.Exists(staging)) return;
+        if (!Directory.Exists(staging)) return false;
 
         // Every top-level directory in the payload is replaced wholesale, except Data\ which is
         // yours. Bounded to one level, and self-maintaining: a release that adds a directory is
@@ -102,6 +127,36 @@ internal static class Launcher
         }
 
         TryQuietly(() => Directory.Delete(staging, true));
+        return true;
+    }
+
+    private static bool HasArgument(string[] args, string wanted)
+    {
+        foreach (string arg in args)
+        {
+            if (string.Equals(arg, wanted, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    private static void Relaunch(string exePath, string[] args)
+    {
+        string commandLine = "";
+        foreach (string arg in args) commandLine += " " + Quote(arg);
+        ProcessStartInfo psi = new ProcessStartInfo(exePath, commandLine.Trim());
+        psi.UseShellExecute = false;
+        psi.EnvironmentVariables["PORTABLE_SIDELOADER_RESUMED"] = "1";
+        psi.EnvironmentVariables["PORTABLE_SIDELOADER_PARENT_PID"] = Process.GetCurrentProcess().Id.ToString();
+        Process.Start(psi);
+        Console.WriteLine("  restarting portable-sideloader before the normal update pass");
+    }
+
+    private static void WaitForParentExit()
+    {
+        string raw = Environment.GetEnvironmentVariable("PORTABLE_SIDELOADER_PARENT_PID");
+        int pid;
+        if (!Int32.TryParse(raw, out pid)) return;
+        try { Process.GetProcessById(pid).WaitForExit(); } catch { /* parent already exited */ }
     }
 
     private static void ReplaceDirectory(string staged, string live)
