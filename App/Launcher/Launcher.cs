@@ -89,7 +89,7 @@ internal static class Launcher
     // deleted while it was the running image.
     private static void CleanupPreviousStub(string root)
     {
-        foreach (string stale in Directory.GetFiles(root, "*.old"))
+        foreach (string stale in Directory.GetFiles(root, "*.old*"))
         {
             TryQuietly(() => File.Delete(stale));
         }
@@ -127,7 +127,12 @@ internal static class Launcher
         string stagedStub = Path.Combine(staging, stubName);
         if (File.Exists(stagedStub))
         {
-            File.Move(exePath, exePath + ".old");
+            string retired = exePath + ".old";
+            if (File.Exists(retired)) TryQuietly(() => File.Delete(retired));
+            if (File.Exists(retired)) {
+                retired = exePath + "." + Guid.NewGuid().ToString("N") + ".old";
+            }
+            File.Move(exePath, retired);
             File.Copy(stagedStub, exePath, true);
             Console.WriteLine("  new launcher staged; it takes effect next launch");
         }
