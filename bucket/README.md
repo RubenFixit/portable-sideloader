@@ -16,3 +16,9 @@ scoop install rubenfixit/my-app
 
 When a manifest is broadly useful and meets Scoop's contribution criteria, submit it upstream and
 remove the duplicate here once the upstream bucket carries it.
+
+## Maintenance notes
+
+`usb-tree-view.json` uses the vendor's rolling latest-download URL. When `checkver` finds a new
+version, update both `version` and `hash`; the vendor does not publish a versioned archive or a
+separate checksum feed.
