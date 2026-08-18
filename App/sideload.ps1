@@ -115,6 +115,7 @@ $TimeoutSec     = [int](Get-Setting $script:Cfg 'timeoutSec'       $TimeoutSec 3
 $StaleDays      = [int](Get-Setting $script:Cfg 'staleDays'        $StaleDays 180)
 $dlTimeoutSec   = [int](Get-Setting $script:Cfg 'downloadTimeoutSec' $null 600)
 $bucketCacheHrs = [int](Get-Setting $script:Cfg 'bucketCacheHours'   $null 24)
+$confirmExternalRemoval = [bool](Get-Setting $script:Cfg 'confirmExternalRemoval' $null $true)
 
 $script:StatusColor = @{
     UpdateAvailable = 'Yellow'
@@ -796,8 +797,43 @@ function Invoke-Update {
     }
     Write-Host ''
 
+    $missing = @($rows | Where-Object { $_.Status -eq 'MissingFolder' })
+    $missingReinstalls = @()
+    if ($missing.Count -gt 0) {
+        Write-Host "  $($missing.Count) managed app folder(s) are missing." -ForegroundColor Yellow
+        foreach ($r in $missing) {
+            if ($DryRun) {
+                if ($r.Upstream.Url) {
+                    Write-Host "    -DryRun: would ask to reinstall $($r.App); No would remove it from apps.json" -ForegroundColor DarkGray
+                } else {
+                    Write-Host "    -DryRun: would remove $($r.App) from apps.json (no download URL available)" -ForegroundColor DarkGray
+                }
+                continue
+            }
+
+            if (-not $confirmExternalRemoval) {
+                $null = Remove-ManagedApp -Manifest $Manifest -Id $r.App
+                Write-Host "    automatically removed $($r.App) from apps.json" -ForegroundColor DarkGray
+            } elseif ($r.Upstream.Url -and (Confirm-Action "Reinstall missing $($r.App) and keep it in apps.json? (No removes it)" -DefaultYes)) {
+                $missingReinstalls += $r
+                Write-Host "    scheduled $($r.App) for reinstallation" -ForegroundColor DarkGray
+            } else {
+                $null = Remove-ManagedApp -Manifest $Manifest -Id $r.App
+                Write-Host "    removed $($r.App) from apps.json" -ForegroundColor DarkGray
+            }
+        }
+
+        if (-not $DryRun) {
+            Save-AppManifest -Manifest $Manifest -Path $ManifestPath
+            $entries = @($Manifest.apps)
+        }
+        Write-Host ''
+    }
+
     $withUpdates = @($rows | Where-Object { $_.Status -eq 'UpdateAvailable' -and $_.Upstream.Url })
-    $baselineOverwrites = @($rows | Where-Object { $_.Status -eq 'NoBaseline' -and $_.Upstream.Url })
+    $baselineOverwrites = @($rows | Where-Object {
+        $_.Status -eq 'NoBaseline' -and $_.Upstream.Url -and ($Force -or -not $_.Held)
+    })
     $heldBack    = @($withUpdates | Where-Object { $_.Held })
     if ($Force) {
         $actionable = @($withUpdates)
@@ -805,6 +841,7 @@ function Invoke-Update {
         $actionable = @($withUpdates | Where-Object { -not $_.Held })
     }
     $actionable = @($actionable) + @($baselineOverwrites)
+    $actionable = @($actionable) + @($missingReinstalls)
 
     if ($heldBack.Count -gt 0 -and -not $Force) {
         Write-Host ''
@@ -827,13 +864,17 @@ function Invoke-Update {
     Write-Host ''
     foreach ($r in $actionable) {
         $isBaselineOverwrite = $r.Status -eq 'NoBaseline'
+        $isMissingReinstall = $r.Status -eq 'MissingFolder'
         Write-Host "  $($r.App)  $($r.Installed) -> $($r.Latest)" -ForegroundColor Yellow
-        $prompt = if ($isBaselineOverwrite) {
+        $prompt = if ($isMissingReinstall) {
+            "Reinstall missing $($r.App)?"
+        } elseif ($isBaselineOverwrite) {
             "No baseline for $($r.App). Replace its existing folder with $($r.Latest)?"
         } else {
             "Update $($r.App)?"
         }
-        if (-not (Confirm-Action $prompt -DefaultYes:$(-not $isBaselineOverwrite))) {
+        # Missing-folder entries were already confirmed in the reconciliation prompt.
+        if (-not $isMissingReinstall -and -not (Confirm-Action $prompt -DefaultYes:$(-not $isBaselineOverwrite))) {
             Write-Host '    skipped' -ForegroundColor DarkGray
             continue
         }

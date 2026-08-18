@@ -10,6 +10,7 @@
     "downloadTimeoutSec": 600,
     "staleDays": 180,
     "autoUpdateSelf": true,
+    "confirmExternalRemoval": true,
     "bucketCacheHours": 24,
     "userAgent": "portable-sideloader",
     "platformMenuIni": null,

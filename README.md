@@ -38,6 +38,12 @@ Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-KeepData`, `-NoBackup`, `-Refre
 
 `update -DryRun` is the safe way to see where everything stands.
 
+If the PortableApps Platform removes an app outside sideloader, the next `update` reports its
+missing folder and asks whether to reinstall it; answering No removes the stale entry from
+`Data\apps.json`. Set
+`settings.confirmExternalRemoval` to `false` in `App\config.json` or `Data\config.local.json` to
+remove those entries automatically.
+
 After a successful install, sideloader asks whether the installed app's executable directory
 should be added to the current user's PATH. Use `-AddToPath` on `install` to add it without a
 prompt. `path <app>` adds an existing managed app, or an app folder already present directly
