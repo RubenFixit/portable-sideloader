@@ -47,8 +47,28 @@ function Add-UserPathEntry {
     }
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
     Write-Host "    added to user PATH: $full" -ForegroundColor Green
-    Write-Host '    open a new terminal for the PATH change to take effect there' -ForegroundColor DarkGray
     return $true
+}
+
+function Invoke-RefreshEnvironment {
+    # Chocolatey's PowerShell helper refreshes the current process from the registry. This is
+    # useful for commands launched by sideloader and for dot-sourced use; an executable cannot
+    # change the environment of the already-running parent PowerShell process.
+    $module = if ($env:ChocolateyInstall) {
+        Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
+    }
+    if (-not $module -or -not (Test-Path -LiteralPath $module)) { return $false }
+
+    try {
+        Import-Module -Name $module -ErrorAction Stop
+        Update-SessionEnvironment
+        Write-Host '    refreshed this process with Chocolatey refreshenv' -ForegroundColor DarkGray
+        Write-Host '    reopen the invoking terminal for its PATH to change' -ForegroundColor DarkGray
+        return $true
+    } catch {
+        Write-Warning "PATH was saved, but Chocolatey refreshenv failed: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Add-AppExecutableToPath {
@@ -63,5 +83,6 @@ function Add-AppExecutableToPath {
     $exe = Get-Prop $Entry 'exe'
     $directory = Get-AppExecutableDirectory -Root $Root -Id $id -Name $name -Exe $exe
     if ($Prompt -and -not $AddToPath -and -not (Confirm-Action "Add $id to your user PATH?")) { return }
-    Add-UserPathEntry -Directory $directory | Out-Null
+    $changed = Add-UserPathEntry -Directory $directory
+    if ($changed -and -not $DryRun) { Invoke-RefreshEnvironment | Out-Null }
 }

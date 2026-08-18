@@ -41,8 +41,10 @@ Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-KeepData`, `-NoBackup`, `-Refre
 After a successful install, sideloader asks whether the installed app's executable directory
 should be added to the current user's PATH. Use `-AddToPath` on `install` to add it without a
 prompt. `path <app>` adds an existing managed app, or an app folder already present directly
-under the PortableApps root, including standard PortableApps packages. The change applies to new
-terminals; existing terminals need to be reopened.
+under the PortableApps root, including standard PortableApps packages. Sideloader invokes
+Chocolatey's `refreshenv` helper when available, refreshing the sideloader process itself. Windows
+does not allow an executable to modify the environment of the PowerShell process that launched it,
+so the invoking terminal still needs to be reopened (or run its own `refreshenv`) to see the change.
 
 ## Adding a source without touching the code
 
