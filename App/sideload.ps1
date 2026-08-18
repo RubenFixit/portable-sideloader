@@ -285,9 +285,27 @@ function Invoke-AppInstall {
 
 function Invoke-Ls {
     param($Manifest, [string]$Root)
-    $entries = @($Manifest.apps)
+    $all = @($Manifest.apps)
+    $entries = $all
     if ($Name) { $entries = @($entries | Where-Object { $Name -contains $_.id }) }
-    if ($entries.Count -eq 0) { Write-Warning 'No matching apps.'; return }
+
+    if ($all.Count -eq 0) {
+        Write-Head 'no apps managed yet'
+        Write-Host '  Add one from a bucket, or straight from a download URL:' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '    .\sideload.ps1 search slicer' -ForegroundColor White
+        Write-Host '    .\sideload.ps1 install orcaslicer' -ForegroundColor White
+        Write-Host '    .\sideload.ps1 install https://example.com/app-1.2.3.zip' -ForegroundColor White
+        Write-Host ''
+        Write-Host '  Already have folders in your PortableApps directory? Register one without' -ForegroundColor DarkGray
+        Write-Host '  downloading, then pull your existing menu categories in:' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '    .\sideload.ps1 add <url> -Id <FolderName>' -ForegroundColor White
+        Write-Host '    .\sideload.ps1 categorize -Import' -ForegroundColor White
+        Write-Host ''
+        return
+    }
+    if ($entries.Count -eq 0) { Write-Warning "No managed app matches: $($Name -join ', ')"; return }
 
     Write-Head "$($entries.Count) managed app(s) in $Root"
     $rows = @($entries | ForEach-Object { Get-AppRow -Entry $_ -Root $Root })
