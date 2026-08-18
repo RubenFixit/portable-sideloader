@@ -1,0 +1,95 @@
+{
+  "_comment": "Everything the tool knows about hosts, version shapes, buckets and paths lives here. Adding a new download source or tweaking version detection should never require editing a .ps1 file. Command-line parameters override these values.",
+
+  "settings": {
+    "portableAppsRoot": null,
+    "cacheDir": "cache",
+    "backupRoot": "backups",
+    "statePath": "state.json",
+    "timeoutSec": 30,
+    "downloadTimeoutSec": 600,
+    "staleDays": 180,
+    "bucketCacheHours": 24,
+    "userAgent": "portable-sideloader",
+    "platformMenuIni": null,
+    "sevenZipPaths": [
+      "%ProgramFiles%\\7-Zip\\7z.exe",
+      "%ProgramFiles(x86)%\\7-Zip\\7z.exe",
+      "<root>\\7-ZipPortable\\App\\7-Zip64\\7z.exe",
+      "<root>\\7-ZipPortable\\App\\7-Zip\\7z.exe"
+    ]
+  },
+
+  "buckets": [
+    {
+      "name": "Main",
+      "indexRepo": "ScoopInstaller/Main",
+      "manifestUrl": "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/{name}.json",
+      "rank": 1
+    },
+    {
+      "name": "Extras",
+      "indexRepo": "ScoopInstaller/Extras",
+      "manifestUrl": "https://raw.githubusercontent.com/ScoopInstaller/Extras/master/bucket/{name}.json",
+      "rank": 0
+    },
+    {
+      "name": "Versions",
+      "indexRepo": "ScoopInstaller/Versions",
+      "manifestUrl": "https://raw.githubusercontent.com/ScoopInstaller/Versions/master/bucket/{name}.json",
+      "rank": 2
+    }
+  ],
+
+  "_categories": "Values the Platform accepts in [AppsRecategorized]. Note it spells these with 'and', not '&', unlike the PAF format spec. Used to warn on typos, not to hard-fail.",
+  "categories": [
+    "Accessibility",
+    "Development",
+    "Education",
+    "Games",
+    "Graphics and Pictures",
+    "Internet",
+    "Music and Video",
+    "Office",
+    "Security",
+    "Utilities",
+    "Other"
+  ],
+
+  "_versionPatterns": "Tried in order against a filename or URL; the first hit is treated as the version. Add your own at the top to win. Use (?: ) for grouping - numbered groups would break the derived regexes.",
+  "versionPatterns": [
+    { "name": "semver4", "regex": "\\d+\\.\\d+\\.\\d+\\.\\d+" },
+    { "name": "calver",  "regex": "20\\d{2}[.-]\\d{2}(?:[.-]\\d+)?" },
+    { "name": "semver3", "regex": "\\d+\\.\\d+\\.\\d+" },
+    { "name": "semver2", "regex": "\\d+\\.\\d+" },
+    { "name": "build",   "regex": "\\d{4,6}" }
+  ],
+
+  "_hosts": "Matched in order against a download URL to infer a provider. Named captures are available as ${name}. Derived tokens: ${assetRegex} (filename with the version replaced by its pattern, anchored), ${filenameRegex} (same, but capturing the version - used to scrape a watch page), ${urlTemplate} (URL with the version replaced by {version}), ${watchUrl} (the -WatchUrl you passed, else the parent directory).",
+  "hosts": [
+    {
+      "name": "github-release-asset",
+      "match": "^https?://github\\.com/(?<owner>[^/]+)/(?<repo>[^/]+)/releases/download/[^/]+/(?<asset>.+)$",
+      "provider": "github",
+      "source": { "repo": "${owner}/${repo}", "assetPattern": "${assetRegex}" }
+    },
+    {
+      "name": "github-repo",
+      "match": "^https?://github\\.com/(?<owner>[^/]+)/(?<repo>[^/]+?)(?:\\.git)?/?$",
+      "provider": "github",
+      "source": { "repo": "${owner}/${repo}" }
+    },
+    {
+      "name": "gitlab-release-asset",
+      "match": "^https?://gitlab\\.com/(?<owner>[^/]+)/(?<repo>[^/]+)/-/releases/[^/]+/downloads/(?<asset>.+)$",
+      "provider": "url",
+      "source": { "watchUrl": "${watchUrl}", "versionPattern": "${filenameRegex}", "urlTemplate": "${urlTemplate}" }
+    },
+    {
+      "name": "generic-url",
+      "match": "^https?://.+",
+      "provider": "url",
+      "source": { "watchUrl": "${watchUrl}", "versionPattern": "${filenameRegex}", "urlTemplate": "${urlTemplate}" }
+    }
+  ]
+}

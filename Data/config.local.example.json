@@ -1,0 +1,37 @@
+{
+  "_comment": "Copy to config.local.json to override App\\config.json. This file lives in Data\\ so an update never touches it. Scalars replace, nested objects merge key by key, and arrays put your entries FIRST while dropping shipped ones with the same 'name'. Delete anything you don't want to change - omitted keys keep the shipped default and keep receiving updates.",
+
+  "settings": {
+    "portableAppsRoot": "X:\\PortableApps\\PortableApps",
+    "staleDays": 90
+  },
+
+  "_hostsNote": "Listed before the shipped rules, so these win. Same 'name' as a shipped rule replaces it outright.",
+  "hosts": [
+    {
+      "name": "my-nas",
+      "match": "^https?://nas\\.local/(?<app>[^/]+)/.+$",
+      "provider": "url",
+      "source": {
+        "watchUrl": "http://nas.local/${app}/",
+        "versionPattern": "${filenameRegex}",
+        "urlTemplate": "${urlTemplate}"
+      }
+    }
+  ],
+
+  "_versionPatternsNote": "Prepended, so a shape the shipped list gets wrong can be fixed here.",
+  "versionPatterns": [
+    { "name": "year-build", "regex": "20\\d{2}b\\d+" }
+  ],
+
+  "_bucketsNote": "Add a private bucket, or replace a shipped one by reusing its name.",
+  "buckets": [
+    {
+      "name": "MyBucket",
+      "indexRepo": "me/my-scoop-bucket",
+      "manifestUrl": "https://raw.githubusercontent.com/me/my-scoop-bucket/master/bucket/{name}.json",
+      "rank": 0
+    }
+  ]
+}

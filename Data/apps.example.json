@@ -1,0 +1,48 @@
+{
+  "_comment": "Copy to apps.json, or just run 'install' and it will be created for you. One entry per sideloaded app. Everything here can be inferred by 'install <url>' - these examples exist to document the shape and the optional fields.",
+
+  "portableAppsRoot": null,
+
+  "apps": [
+    {
+      "id": "OrcaSlicer",
+      "name": "OrcaSlicer",
+      "provider": "scoop",
+      "source": { "bucket": "Extras", "manifest": "orcaslicer" },
+      "category": "Development"
+    },
+    {
+      "id": "Libation",
+      "name": "Libation",
+      "provider": "github",
+      "source": {
+        "repo": "rmcrackan/Libation",
+        "assetPattern": "windows-chardonnay-x64\\.zip$"
+      },
+      "category": "Music and Video"
+    },
+    {
+      "id": "UsbTreeView",
+      "name": "USB Device Tree Viewer",
+      "provider": "url",
+      "source": {
+        "watchUrl": "https://www.uwe-sieber.de/usbtreeview_e.html",
+        "versionPattern": "(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)",
+        "urlTemplate": "https://www.uwe-sieber.de/files/UsbTreeView_x64.zip"
+      },
+      "category": "Utilities",
+      "notes": "The download URL carries no version, so versionPattern is hand-written rather than derived."
+    },
+    {
+      "_optionalFields": "Any entry may also carry these.",
+      "id": "ExampleApp",
+      "name": "Example App",
+      "provider": "todo",
+      "source": {},
+      "exe": "ExampleApp.exe",
+      "preserve": ["Data", "profiles"],
+      "category": "Utilities",
+      "notes": "exe pins which executable is used for version detection and the Platform menu key. preserve lists folders to carry across an update, overriding the Scoop manifest's persist."
+    }
+  ]
+}

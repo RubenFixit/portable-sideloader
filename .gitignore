@@ -1,0 +1,27 @@
+# Your local overrides and runtime state. App\ is replaced on update; Data\ is not,
+# so anything here that is genuinely yours (apps.json) stays tracked on purpose.
+Data/apps.json
+Data/config.local.json
+Data/state.json
+Data/cache/
+Data/backups/
+Data/staging/
+Data/update/
+
+# Built by build.ps1; shipped in releases, not tracked here
+/PortableSideloader.exe
+*.old
+*.replaced
+
+# Legacy locations, before the App\ / Data\ split
+/state.json
+/cache/
+/backups/
+/staging/
+report.json
+
+# Editors
+.vscode/
+.idea/
+*.swp
+Thumbs.db
