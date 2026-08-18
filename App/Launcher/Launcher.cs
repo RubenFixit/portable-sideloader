@@ -70,8 +70,18 @@ internal static class Launcher
             int selfCode = RunScript(script, selfArgs);
             if (selfCode == 42)
             {
-                Relaunch(exePath, args);
-                return 0;
+                // Replacing the running executable requires handing the console back to the
+                // shell. A restarted child would then race interactive prompts with the shell's
+                // new prompt, so apply App\ and tools\ now and defer only the launcher binary.
+                try
+                {
+                    ApplyStagedUpdate(root, exePath, false);
+                    Console.WriteLine("  continuing with the updated app and tools; the launcher binary will be replaced next run");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("  ! staged update failed, continuing with current version: " + ex.Message);
+                }
             }
             if (selfCode != 0)
             {
@@ -95,7 +105,7 @@ internal static class Launcher
         }
     }
 
-    private static bool ApplyStagedUpdate(string root, string exePath)
+    private static bool ApplyStagedUpdate(string root, string exePath, bool replaceStub = true)
     {
         string staging = Path.Combine(root, "Data", "update");
         if (!Directory.Exists(staging)) return false;
@@ -125,7 +135,7 @@ internal static class Launcher
         // The stub itself cannot be overwritten while it is running, but it CAN be renamed - so
         // move ourselves aside and drop the new one in. It takes effect on the next launch.
         string stagedStub = Path.Combine(staging, stubName);
-        if (File.Exists(stagedStub))
+        if (replaceStub && File.Exists(stagedStub))
         {
             string retired = exePath + ".old";
             if (File.Exists(retired)) TryQuietly(() => File.Delete(retired));
@@ -137,7 +147,21 @@ internal static class Launcher
             Console.WriteLine("  new launcher staged; it takes effect next launch");
         }
 
-        TryQuietly(() => Directory.Delete(staging, true));
+        if (replaceStub)
+        {
+            TryQuietly(() => Directory.Delete(staging, true));
+        }
+        else
+        {
+            // Retain only the staged launcher for the next invocation.
+            foreach (string file in Directory.GetFiles(staging))
+            {
+                if (!string.Equals(Path.GetFileName(file), stubName, StringComparison.OrdinalIgnoreCase))
+                    TryQuietly(() => File.Delete(file));
+            }
+            foreach (string directory in Directory.GetDirectories(staging))
+                TryQuietly(() => Directory.Delete(directory, true));
+        }
         return true;
     }
 
