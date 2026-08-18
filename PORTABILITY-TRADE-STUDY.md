@@ -141,7 +141,7 @@ Buckets, manifests, dependencies, versions, persistence, hashes, and update rule
 
 ### Better fit for command-line software
 
-For tools such as Git, compilers, SDKs, command-line utilities, language runtimes, and build tools, Scoop's shims and update workflow are usually more convenient than manually managing application directories. A user's installed software can be rebuilt from a script or a list of manifests.
+For tools such as Git, compilers, SDKs, command-line utilities, language runtimes, and build tools, Scoop's shims and user-context PATH management are usually more convenient than manually managing application directories. Git is a good example: a portable Git installation can travel with the collection, but the Scoop version is usually the better choice when Git is primarily a shell tool. A user's installed software can be rebuilt from a script or a list of manifests.
 
 ### Cleaner separation from application collections
 
@@ -216,7 +216,7 @@ The problem is not necessarily as complicated as building a complete synchroniza
 
 There would still be a small amount of per-user setup. Scoop normally keeps its configuration under the user's profile in `.config\scoop`, and the Scoop shims directory needs to be on that user's PATH. The second computer would therefore need Scoop's root path and shim path configured, either by installing Scoop once or by setting up those paths directly. The systems would also need compatible architectures and the same layout assumptions. This is much simpler than trying to synchronize arbitrary Windows environments, but it is still different from copying a PortableApps directory and expecting the collection to work without any user-profile setup.
 
-The main operational risk would be synchronizing while Scoop is running or while an app is being updated, same goes for PorableApps. A shared Scoop root would also need a policy for conflicts, bucket updates, and applications that rely on machine-specific settings or installers. Those are manageable constraints for a personal setup with matching systems, but they are reasons a general-purpose ScoopSync tool would need more than a file-copy command.
+The main operational risk would be synchronizing while Scoop is running or while an app is being updated. The same goes for PortableApps. A shared Scoop root would also need a policy for conflicts, bucket updates, and applications that rely on machine-specific settings or installers. Those are manageable constraints for a personal setup with matching systems, but they are reasons a general-purpose ScoopSync tool would need more than a file-copy command.
 
 That is why I chose to develop PortableSideloader. PortableApps already defines the collection boundary, menu integration, and portability-oriented data conventions. PortableSideloader only needs to add the missing manifest-driven update layer for apps outside the official catalog. Scoop remains valuable on the same systems, especially for clean-slate software provisioning and command-line tools, but building a ScoopSync tool would have duplicated much of the collection and portability infrastructure that was already available through PortableApps.
 

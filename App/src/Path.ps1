@@ -50,6 +50,66 @@ function Add-UserPathEntry {
     return $true
 }
 
+function ConvertTo-ComparablePath {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim())
+    try { return [IO.Path]::GetFullPath($expanded).TrimEnd('\') } catch { return $expanded.TrimEnd('\') }
+}
+
+function Remove-UserPathEntries {
+    param(
+        [string[]]$Directories,
+        [string]$UnderDirectory
+    )
+
+    $raw = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $entries = @($raw -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $targets = @($Directories | Where-Object { $_ } | ForEach-Object { ConvertTo-ComparablePath $_ })
+    $under = if ($UnderDirectory) { ConvertTo-ComparablePath $UnderDirectory } else { $null }
+    $removed = @($entries | Where-Object {
+        $current = ConvertTo-ComparablePath $_
+        ($targets -contains $current) -or ($under -and ($current -ieq $under -or $current.StartsWith($under + '\', [StringComparison]::OrdinalIgnoreCase)))
+    })
+
+    if ($removed.Count -eq 0) {
+        if ($under) { Write-Host "    no user PATH entries found under: $under" -ForegroundColor DarkGray }
+        return $false
+    }
+
+    $remaining = @($entries | Where-Object { $removed -notcontains $_ })
+    if ($DryRun) {
+        foreach ($entry in $removed) { Write-Host "    -DryRun: would remove from user PATH: $entry" -ForegroundColor DarkGray }
+        return $true
+    }
+
+    [Environment]::SetEnvironmentVariable('Path', ($remaining -join ';'), 'User')
+    foreach ($entry in $removed) { Write-Host "    removed from user PATH: $entry" -ForegroundColor Green }
+    Invoke-RefreshEnvironment | Out-Null
+    return $true
+}
+
+function Remove-AppPathEntries {
+    param(
+        [Parameter(Mandatory)]$Entry,
+        [Parameter(Mandatory)][string]$Root,
+        [string[]]$Paths
+    )
+
+    $id = Get-Prop $Entry 'id'
+    if ($Paths -and $Paths.Count -gt 0) {
+        $targets = @($Paths | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object {
+            $_
+        } | ForEach-Object {
+            if ([IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $Root $_ }
+        })
+        Remove-UserPathEntries -Directories $targets | Out-Null
+        return
+    }
+
+    Remove-UserPathEntries -UnderDirectory (Join-Path $Root $id) | Out-Null
+}
+
 function Invoke-RefreshEnvironment {
     # Chocolatey's PowerShell helper refreshes the current process from the registry. This is
     # useful for commands launched by sideloader and for dot-sourced use; an executable cannot

@@ -174,26 +174,46 @@ function Compare-AppVersion {
 }
 
 function Resolve-PortableAppsRoot {
-    param([string]$Explicit, [string]$FromManifest)
+    param(
+        [string]$Explicit,
+        [string]$FromManifest,
+        [string]$PackageRoot
+    )
+
+    function Confirm-PortableAppsRoot {
+        param([Parameter(Mandatory)][string]$Candidate)
+
+        if (-not (Test-Path -LiteralPath $Candidate -PathType Container)) {
+            throw "PortableApps root not found: $Candidate"
+        }
+
+        $resolved = (Resolve-Path -LiteralPath $Candidate).Path
+        $parent = Split-Path -Parent $resolved
+        $start = Join-Path $parent 'Start.exe'
+        if ((Split-Path -Leaf $resolved) -ine 'PortableApps' -or -not (Test-Path -LiteralPath $start -PathType Leaf)) {
+            throw "Not a PortableApps root: '$resolved' must be a PortableApps folder next to Start.exe."
+        }
+        return $resolved
+    }
 
     foreach ($candidate in @($Explicit, $FromManifest)) {
         if ($candidate) {
-            if (-not (Test-Path -LiteralPath $candidate)) {
-                throw "PortableApps root not found: $candidate"
-            }
-            return (Resolve-Path -LiteralPath $candidate).Path
+            return Confirm-PortableAppsRoot -Candidate $candidate
         }
     }
 
     $guesses = @(
+        if ($PackageRoot) { Join-Path $PackageRoot '..\..' }
         (Join-Path $env:USERPROFILE 'PortableApps\PortableApps'),
         'C:\PortableApps\PortableApps',
         'D:\PortableApps\PortableApps',
         'E:\PortableApps\PortableApps'
     )
     foreach ($g in $guesses) {
-        if (Test-Path -LiteralPath $g) { return (Resolve-Path -LiteralPath $g).Path }
+        if (Test-Path -LiteralPath $g -PathType Container) {
+            try { return Confirm-PortableAppsRoot -Candidate $g } catch { Write-Verbose $_.Exception.Message }
+        }
     }
 
-    throw "Could not locate a PortableApps directory. Pass -PortableAppsRoot or set portableAppsRoot in apps.json."
+    throw "Could not locate a valid PortableApps directory. Pass -PortableAppsRoot or set portableAppsRoot in apps.json. The root must be named PortableApps and sit next to Start.exe."
 }

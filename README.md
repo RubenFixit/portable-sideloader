@@ -31,6 +31,12 @@ cd C:\Users\<you>\PortableApps\PortableApps\PortableSideloader
 
 On first launch it creates `Data\`, discovers the surrounding PortableApps directory, and registers PortableSideloader in its local app registry. It is a sideloaded utility, not a PAF installer, so launch it directly or create a shortcut to `PortableSideloader.exe` in the PortableApps menu. Your personal registry and settings remain in `Data\` and are not included in release packages.
 
+When no PortableApps root is configured, sideloader infers it from this layout: the installed
+`PortableSideloader\` folder is under `PortableApps\PortableApps\`, and the app root is the
+`PortableApps` directory two levels above it. It confirms the directory is named `PortableApps`
+and that its parent contains `Start.exe`. If the collection uses a different layout, pass
+`-PortableAppsRoot` or set `portableAppsRoot` in `Data\apps.json`.
+
 ## Usage
 
 One entry point, twelve commands.
@@ -46,6 +52,7 @@ cd App
 .\sideload.ps1 install <url>         # ...or straight from a download URL
 .\sideload.ps1 path OrcaSlicer       # add its executable directory to the user PATH
 .\sideload.ps1 path git -Path Git\cmd,Git  # add explicit PortableApps-root paths
+.\sideload.ps1 path git -Remove         # remove all PATH entries under the app folder
 .\sideload.ps1 update                # check everything, prompt per app
 .\sideload.ps1 remove UserBenchMark -KeepData
 .\sideload.ps1 categorize -Import    # pull Platform categories into apps.json
@@ -54,19 +61,26 @@ cd App
 .\sideload.ps1 restore OrcaSlicer -List
 ```
 
-Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
+Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-Remove`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
 `-DisplayName`, `-WatchUrl`, `-VersionPattern`, `-Preserve`, `-Category`, `-PortableAppsRoot`,
 `-DataDir`, `-ConfigPath`, `-LocalConfigPath`.
 
 `update -DryRun` is the safe way to see where everything stands. `path <app>` adds the detected
 executable directory by default. Use one or more `-Path` values to add explicit directories instead;
-relative values resolve from the PortableApps root and absolute values are accepted as-is. For
-example, Git may need both `Git\cmd` for command-line tools and `Git` for `git-bash.exe` (pass
-multiple values as a comma-separated list):
+relative values resolve from the PortableApps root and absolute values are accepted as-is. Use
+`path <app> -Remove` to remove all PATH entries under that app's folder, or combine `-Remove` with
+`-Path` to remove only specific entries. Removing an app also removes its PATH entries
+automatically. For example, Git may need both `Git\cmd` for command-line tools and `Git` for
+`git-bash.exe` (pass multiple values as a comma-separated list):
 
 ```powershell
 .\sideload.ps1 path git -Path Git\cmd,Git
 ```
+
+For Git and similar shell-heavy tools, Scoop is usually the better choice. Scoop's shims and
+user-context PATH management are part of its normal installation model. A portable Git install
+can still be useful when Git needs to travel with the PortableApps collection, but direct PATH
+entries into that collection need to be removed or refreshed when the collection moves.
 
 If the PortableApps Platform removes an app outside sideloader, the next `update` reports its
 missing folder and asks whether to reinstall it; answering No removes the stale entry from
