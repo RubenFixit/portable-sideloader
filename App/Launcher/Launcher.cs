@@ -223,6 +223,8 @@ internal static class Launcher
         ProcessStartInfo psi = new ProcessStartInfo(FindPowerShell(), arguments);
         psi.UseShellExecute = false;
         psi.WorkingDirectory = Path.GetDirectoryName(script);
+        arguments += " -LauncherCommand " + Quote(".\\" + Path.GetFileName(Assembly.GetExecutingAssembly().Location));
+        psi.Arguments = arguments;
 
         using (Process p = Process.Start(psi))
         {

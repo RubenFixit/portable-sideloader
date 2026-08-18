@@ -43,6 +43,7 @@ param(
     [string]   $ConfigPath   = (Join-Path $PSScriptRoot 'config.json'),
     [string]   $LocalConfigPath,
     [string]   $ManifestPath,
+    [string]   $LauncherCommand,
 
     # Everything below falls back to config.json when not supplied.
     [string]   $PortableAppsRoot,
@@ -86,6 +87,8 @@ $ProgressPreference    = 'SilentlyContinue'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
 $script:PackageRoot = Split-Path -Parent $PSScriptRoot
+$script:CommandName = $LauncherCommand
+if (-not $script:CommandName) { $script:CommandName = '.\sideload.ps1' }
 if (-not (Test-Path -LiteralPath $DataDir)) { New-Item -ItemType Directory -Path $DataDir -Force | Out-Null }
 if (-not $LocalConfigPath) { $LocalConfigPath = Join-Path $DataDir 'config.local.json' }
 if (-not $ManifestPath)    { $ManifestPath    = Join-Path $DataDir 'apps.json' }
@@ -380,15 +383,15 @@ function Invoke-Ls {
         Write-Head 'no apps managed yet'
         Write-Host '  Add one from a bucket, or straight from a download URL:' -ForegroundColor DarkGray
         Write-Host ''
-        Write-Host '    .\sideload.ps1 search slicer' -ForegroundColor White
-        Write-Host '    .\sideload.ps1 install orcaslicer' -ForegroundColor White
-        Write-Host '    .\sideload.ps1 install https://example.com/app-1.2.3.zip' -ForegroundColor White
+        Write-Host "    $script:CommandName search slicer" -ForegroundColor White
+        Write-Host "    $script:CommandName install orcaslicer" -ForegroundColor White
+        Write-Host "    $script:CommandName install https://example.com/app-1.2.3.zip" -ForegroundColor White
         Write-Host ''
         Write-Host '  Already have folders in your PortableApps directory? Register one without' -ForegroundColor DarkGray
         Write-Host '  downloading, then pull your existing menu categories in:' -ForegroundColor DarkGray
         Write-Host ''
-        Write-Host '    .\sideload.ps1 add <url> -Id <FolderName>' -ForegroundColor White
-        Write-Host '    .\sideload.ps1 categorize -Import' -ForegroundColor White
+        Write-Host "    $script:CommandName add <url> -Id <FolderName>" -ForegroundColor White
+        Write-Host "    $script:CommandName categorize -Import" -ForegroundColor White
         Write-Host ''
         return
     }
@@ -412,12 +415,12 @@ function Invoke-Ls {
     }
     Write-Host ''
     Write-Host '  * version read from an exe resource, not authoritative' -ForegroundColor DarkGray
-    Write-Host "  run 'update -DryRun' to compare against upstream" -ForegroundColor DarkGray
+    Write-Host "  run '$script:CommandName update -DryRun' to compare against upstream" -ForegroundColor DarkGray
     Write-Host ''
 }
 
 function Invoke-Search {
-    if (-not $Name) { throw "search needs a term, e.g. .\sideload.ps1 search slicer" }
+    if (-not $Name) { throw "search needs a term, e.g. $script:CommandName search slicer" }
     $term  = $Name[0]
     $index = Get-BucketIndex -CachePath (Join-Path $CacheDir 'buckets.json') -Config $script:Cfg `
                  -MaxAgeHours $bucketCacheHrs -Force:$Refresh -TimeoutSec $TimeoutSec
@@ -435,17 +438,17 @@ function Invoke-Search {
     }
     if ($hits.Count -gt 40) { Write-Host "  ... and $($hits.Count - 40) more" -ForegroundColor DarkGray }
     Write-Host ''
-    Write-Host "  install with: .\sideload.ps1 install $($hits[0].Name)" -ForegroundColor DarkGray
+    Write-Host "  install with: $script:CommandName install $($hits[0].Name)" -ForegroundColor DarkGray
     Write-Host ''
 }
 
 function Invoke-Show {
     param($Manifest, [string]$Root)
-    if (-not $Name) { throw "show needs an app id, e.g. .\sideload.ps1 show OrcaSlicer" }
+    if (-not $Name) { throw "show needs an app id, e.g. $script:CommandName show OrcaSlicer" }
 
     foreach ($n in $Name) {
         $entry = Get-ManagedApp -Manifest $Manifest -Id $n
-        if (-not $entry) { Write-Warning "'$n' is not managed. Try: .\sideload.ps1 ls"; continue }
+        if (-not $entry) { Write-Warning "'$n' is not managed. Try: $script:CommandName ls"; continue }
 
         $row = Get-AppRow -Entry $entry -Root $Root -Online
         Write-Head $row.Name
@@ -496,7 +499,7 @@ function Show-Inference {
 }
 
 function Invoke-Explain {
-    if (-not $Name) { throw "explain needs a download URL, e.g. .\sideload.ps1 explain https://example.com/app-1.2.3.zip" }
+    if (-not $Name) { throw "explain needs a download URL, e.g. $script:CommandName explain https://example.com/app-1.2.3.zip" }
     $url = $Name[0]
 
     Write-Head 'inferred source'
@@ -526,7 +529,7 @@ function Invoke-Add {
         PortableApps directory. The next `update` will pick it up.
     #>
     param($Manifest, [string]$Root)
-    if (-not $Name) { throw "add needs a download URL, e.g. .\sideload.ps1 add https://example.com/app-1.2.3.zip -Id MyApp" }
+    if (-not $Name) { throw "add needs a download URL, e.g. $script:CommandName add https://example.com/app-1.2.3.zip -Id MyApp" }
     $url = $Name[0]
 
     $appId = if ($Id) { $Id } elseif ($Name.Count -gt 1) { $Name[1] } else {
@@ -548,7 +551,7 @@ function Invoke-Add {
     $null = Add-ManagedApp -Manifest $Manifest -Entry $built.Entry
     Save-AppManifest -Manifest $Manifest -Path $ManifestPath
     Write-Host "    registered in $ManifestPath" -ForegroundColor Green
-    Write-Host "    run: .\sideload.ps1 update $appId" -ForegroundColor DarkGray
+    Write-Host "    run: $script:CommandName update $appId" -ForegroundColor DarkGray
     Write-Host ''
 }
 
@@ -602,7 +605,7 @@ function Invoke-InstallFromUrl {
 
 function Invoke-Install {
     param($Manifest, [string]$Root)
-    if (-not $Name) { throw "install needs a name or URL, e.g. .\sideload.ps1 install orcaslicer" }
+    if (-not $Name) { throw "install needs a name or URL, e.g. $script:CommandName install orcaslicer" }
     $term = $Name[0]
 
     if ($term -match '^https?://') {
@@ -820,7 +823,7 @@ function Invoke-SelfUpdate {
 
 function Invoke-Remove {
     param($Manifest, [string]$Root)
-    if (-not $Name) { throw "remove needs an app id, e.g. .\sideload.ps1 remove UserBenchMark" }
+    if (-not $Name) { throw "remove needs an app id, e.g. $script:CommandName remove UserBenchMark" }
 
     foreach ($n in $Name) {
         $entry = Get-ManagedApp -Manifest $Manifest -Id $n
@@ -927,7 +930,7 @@ function Invoke-Categorize {
 
     if ($wanted.Count -eq 0) {
         Write-Host '  No apps have a category set. Add "category" to apps.json, pass -Category on install,' -ForegroundColor DarkGray
-        Write-Host '  or run: .\sideload.ps1 categorize -Import' -ForegroundColor DarkGray
+        Write-Host "  or run: $script:CommandName categorize -Import" -ForegroundColor DarkGray
         Write-Host ''
         return
     }
@@ -955,7 +958,7 @@ function Invoke-Categorize {
 
 function Invoke-Hold {
     param($Manifest, [string]$Root, [switch]$Off)
-    if (-not $Name) { throw "$(if ($Off) { 'unhold' } else { 'hold' }) needs an app id. Try: .\sideload.ps1 ls" }
+    if (-not $Name) { throw "$(if ($Off) { 'unhold' } else { 'hold' }) needs an app id. Try: $script:CommandName ls" }
 
     Write-Head $(if ($Off) { 'release hold' } else { 'hold' })
     $changed = 0
@@ -991,11 +994,11 @@ function Invoke-Hold {
 
 function Invoke-Restore {
     param($Manifest, [string]$Root)
-    if (-not $Name) { throw "restore needs an app id, e.g. .\sideload.ps1 restore OrcaSlicer" }
+    if (-not $Name) { throw "restore needs an app id, e.g. $script:CommandName restore OrcaSlicer" }
 
     $id = $Name[0]
     $entry = Get-ManagedApp -Manifest $Manifest -Id $id
-    if (-not $entry) { throw "'$id' is not managed. Try: .\sideload.ps1 ls" }
+    if (-not $entry) { throw "'$id' is not managed. Try: $script:CommandName ls" }
     if (Test-SelfEntry $entry) {
         throw "Cannot restore '$id' over itself while it is running. Install an older release instead, or unpack a backup by hand."
     }
@@ -1016,7 +1019,7 @@ function Invoke-Restore {
     }
     Write-Host ''
 
-    if ($List) { Write-Host "  restore with: .\sideload.ps1 restore $id $($backups[0].Timestamp)" -ForegroundColor DarkGray; Write-Host ''; return }
+    if ($List) { Write-Host "  restore with: $script:CommandName restore $id $($backups[0].Timestamp)" -ForegroundColor DarkGray; Write-Host ''; return }
 
     $wanted = if ($Name.Count -gt 1) { $Name[1] } else { $backups[0].Timestamp }
     $chosen = $backups | Where-Object { $_.Timestamp -eq $wanted } | Select-Object -First 1
@@ -1048,7 +1051,9 @@ function Invoke-Restore {
 }
 
 function Invoke-Help {
-    Write-Head 'portable-sideloader'
+    $versionPath = Join-Path $PSScriptRoot 'VERSION'
+    $version = if (Test-Path -LiteralPath $versionPath) { (Get-Content -LiteralPath $versionPath -Raw).Trim() } else { 'unknown' }
+    Write-Head "portable-sideloader $version"
     @(
         @('ls',                    'List managed apps and installed versions (offline)'),
         @('search <term>',         'Search the configured buckets for an installable app'),
