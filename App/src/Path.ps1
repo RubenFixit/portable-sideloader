@@ -86,3 +86,23 @@ function Add-AppExecutableToPath {
     $changed = Add-UserPathEntry -Directory $directory
     if ($changed -and -not $DryRun) { Invoke-RefreshEnvironment | Out-Null }
 }
+
+function Add-AppPathEntries {
+    param(
+        [Parameter(Mandatory)]$Entry,
+        [Parameter(Mandatory)][string]$Root,
+        [string[]]$Paths
+    )
+
+    if (-not $Paths -or $Paths.Count -eq 0) {
+        Add-AppExecutableToPath -Entry $Entry -Root $Root
+        return
+    }
+
+    $changed = $false
+    foreach ($path in @($Paths | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        $directory = if ([IO.Path]::IsPathRooted($path)) { $path } else { Join-Path $Root $path }
+        $changed = (Add-UserPathEntry -Directory $directory) -or $changed
+    }
+    if ($changed -and -not $DryRun) { Invoke-RefreshEnvironment | Out-Null }
+}

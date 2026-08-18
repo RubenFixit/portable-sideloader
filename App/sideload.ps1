@@ -9,7 +9,7 @@
       search <term>           Search the Scoop buckets for an installable app.
       show <app>              Everything known about one app, including the upstream version.
       install <name>          Add an app and install it into the PortableApps folder.
-      path <app>              Add an installed app's executable directory to user PATH.
+      path <app>              Add app directories, or its executable directory, to user PATH.
       update [app]            Check for updates and apply them, prompting per app.
       self-update             Check and stage portable-sideloader itself (launcher preflight).
       remove <app>            Uninstall an app and stop managing it.
@@ -72,7 +72,8 @@ param(
     [switch]   $KeepData,
     [switch]   $NoBackup,
     [switch]   $Refresh,
-    [switch]   $AddToPath
+    [switch]   $AddToPath,
+    [string[]] $Path
 )
 
 Set-StrictMode -Version Latest
@@ -734,7 +735,7 @@ function Invoke-Path {
             $entry = [pscustomobject]@{ id = $id; name = $id; provider = 'portableapps' }
         }
         Write-Head "path $id"
-        Add-AppExecutableToPath -Entry $entry -Root $Root
+        Add-AppPathEntries -Entry $entry -Root $Root -Paths $Path
         Write-Host ''
     }
 }
@@ -1189,7 +1190,7 @@ function Invoke-Help {
         @('explain <url>',         'Show what would be inferred from a URL, and test it live'),
         @('add <url> -Id <app>',   'Register an already-present folder, without downloading'),
         @('install <name|url>',    'Add an app and install it into the PortableApps folder'),
-        @('path <app>',            'Add an installed app executable directory to user PATH'),
+        @('path <app> [-Path <dir>]', 'Add app directories to user PATH'),
         @('update [app]',          'Check upstream and apply updates, prompting per app'),
         @('remove <app>',          'Uninstall an app and stop managing it'),
         @('categorize [-Import]',  'Sync apps.json categories with the Platform menu'),
@@ -1201,7 +1202,7 @@ function Invoke-Help {
         Write-Host $_[1] -ForegroundColor DarkGray
     }
     Write-Host ''
-    Write-Host '    Options: -DryRun -Yes -AddToPath -KeepData -NoBackup -Refresh -Bucket <b> -Id <folder>' -ForegroundColor DarkGray
+    Write-Host '    Options: -DryRun -Yes -AddToPath -Path <dir> -KeepData -NoBackup -Refresh -Bucket <b> -Id <folder>' -ForegroundColor DarkGray
     Write-Host '             -WatchUrl <page> -VersionPattern <regex> -Preserve a,b -DisplayName <s>' -ForegroundColor DarkGray
     Write-Host '             -PortableAppsRoot <path> -DataDir <path> -TimeoutSec <n> -StaleDays <n>' -ForegroundColor DarkGray
     Write-Host ''

@@ -44,7 +44,8 @@ cd App
 .\sideload.ps1 add <url> -Id MyApp   # register a folder you already have, no download
 .\sideload.ps1 install orcaslicer    # install by bucket name...
 .\sideload.ps1 install <url>         # ...or straight from a download URL
-.\sideload.ps1 path OrcaSlicer       # add an installed app to the user PATH
+.\sideload.ps1 path OrcaSlicer       # add its executable directory to the user PATH
+.\sideload.ps1 path git -Path Git\cmd,Git  # add explicit PortableApps-root paths
 .\sideload.ps1 update                # check everything, prompt per app
 .\sideload.ps1 remove UserBenchMark -KeepData
 .\sideload.ps1 categorize -Import    # pull Platform categories into apps.json
@@ -57,7 +58,15 @@ Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-KeepData`, `-NoBackup`, `-Refre
 `-DisplayName`, `-WatchUrl`, `-VersionPattern`, `-Preserve`, `-Category`, `-PortableAppsRoot`,
 `-DataDir`, `-ConfigPath`, `-LocalConfigPath`.
 
-`update -DryRun` is the safe way to see where everything stands.
+`update -DryRun` is the safe way to see where everything stands. `path <app>` adds the detected
+executable directory by default. Use one or more `-Path` values to add explicit directories instead;
+relative values resolve from the PortableApps root and absolute values are accepted as-is. For
+example, Git may need both `Git\cmd` for command-line tools and `Git` for `git-bash.exe` (pass
+multiple values as a comma-separated list):
+
+```powershell
+.\sideload.ps1 path git -Path Git\cmd,Git
+```
 
 If the PortableApps Platform removes an app outside sideloader, the next `update` reports its
 missing folder and asks whether to reinstall it; answering No removes the stale entry from
