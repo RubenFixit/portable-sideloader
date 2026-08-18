@@ -84,7 +84,7 @@ function Get-BucketIndex {
             continue
         }
         $branch = [string](Get-Prop $bucket 'branch' 'master')
-        $uri = "https://api.github.com/repos/$repo/git/trees/$branch?recursive=1"
+        $uri = "https://api.github.com/repos/$repo/git/trees/${branch}?recursive=1"
         try {
             $tree = Invoke-RestMethod -Uri $uri -Headers (Get-RequestHeaders -GitHubApi) -TimeoutSec $TimeoutSec
             foreach ($node in $tree.tree) {
