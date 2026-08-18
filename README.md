@@ -157,6 +157,12 @@ there for apps that are not in Scoop yet; they become available to `search` and 
 the bucket index refreshes. A clean manifest can later be proposed to Scoop Main or Extras without
 changing the sideloader entry that records the installed folder and preserved data.
 
+The recommended flow is bucket-first: add the manifest, install by bucket name, and let the bucket
+be the update source. The sideloader does not rewrite bucket manifests during `update`; it only
+reads them. This keeps app updates separate from repository writes and credentials. GitHub Actions
+runs `tools\Update-Bucket.ps1 -Apply` daily and can also be started manually from the Actions tab,
+then commits changed manifests. Once that commit is visible, the next sideloader update sees it.
+
 Bucket manifests can opt into the shared updater with an `x-portable-sideloader` block containing
 the same `provider` and `source` shape used by `apps.json`. Preview changes with
 `tools\Update-Bucket.ps1`; add `-Apply` to write updated `version`, `url`, and `hash` values. GitHub

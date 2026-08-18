@@ -17,6 +17,9 @@ scoop install rubenfixit/my-app
 When a manifest is broadly useful and meets Scoop's contribution criteria, submit it upstream and
 remove the duplicate here once the upstream bucket carries it.
 
+Manifest updates are automated by `.github/workflows/update-bucket.yml`, which runs daily and can
+also be dispatched manually. It commits only changed files under `bucket\`.
+
 ## Maintenance notes
 
 `usb-tree-view.json` uses the vendor's rolling latest-download URL. When `checkver` finds a new
