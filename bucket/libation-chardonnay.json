@@ -1,0 +1,30 @@
+{
+  "version": "13.7.10",
+  "description": "Audible library manager that downloads, decrypts, organizes, and searches audiobooks",
+  "homepage": "https://getlibation.com/",
+  "license": "GPL-3.0-only",
+  "url": "https://github.com/rmcrackan/Libation/releases/download/v13.7.10/Libation.13.7.10-windows-chardonnay-x64.zip",
+  "hash": "fddd1f758d69107d9d5722609c0197f328ab8ef35fab7725d83c79c4e2c90d4e",
+  "bin": [
+    [
+      "Libation.exe",
+      "libation"
+    ],
+    [
+      "LibationCli.exe",
+      "libation-cli"
+    ]
+  ],
+  "shortcuts": [
+    [
+      "Libation.exe",
+      "Libation"
+    ]
+  ],
+  "checkver": {
+    "github": "https://github.com/rmcrackan/Libation"
+  },
+  "autoupdate": {
+    "url": "https://github.com/rmcrackan/Libation/releases/download/v$version/Libation.$version-windows-chardonnay-x64.zip"
+  }
+}
