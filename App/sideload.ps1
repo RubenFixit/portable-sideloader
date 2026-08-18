@@ -9,6 +9,7 @@
       search <term>           Search the Scoop buckets for an installable app.
       show <app>              Everything known about one app, including the upstream version.
       install <name>          Add an app and install it into the PortableApps folder.
+      path <app>              Add an installed app's executable directory to user PATH.
       update [app]            Check for updates and apply them, prompting per app.
       self-update             Check and stage portable-sideloader itself (launcher preflight).
       remove <app>            Uninstall an app and stop managing it.
@@ -31,7 +32,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'update', 'self-update', 'remove',
+    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'path', 'update', 'self-update', 'remove',
                  'categorize', 'hold', 'unhold', 'restore', 'help')]
     [string]   $Command = 'help',
 
@@ -70,7 +71,8 @@ param(
     [switch]   $Yes,
     [switch]   $KeepData,
     [switch]   $NoBackup,
-    [switch]   $Refresh
+    [switch]   $Refresh,
+    [switch]   $AddToPath
 )
 
 Set-StrictMode -Version Latest
@@ -83,6 +85,7 @@ $ProgressPreference    = 'SilentlyContinue'
 . (Join-Path $PSScriptRoot 'src\Package.ps1')
 . (Join-Path $PSScriptRoot 'src\Infer.ps1')
 . (Join-Path $PSScriptRoot 'src\PlatformMenu.ps1')
+. (Join-Path $PSScriptRoot 'src\Path.ps1')
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
@@ -600,6 +603,8 @@ function Invoke-InstallFromUrl {
     Write-Host ''
     Write-Host "    installed $appId $($result.Version)" -ForegroundColor Green
     Write-Host "    registered in $ManifestPath" -ForegroundColor DarkGray
+    try { Add-AppExecutableToPath -Entry $built.Entry -Root $Root -Prompt }
+    catch { Write-Warning "Could not add $appId to PATH: $($_.Exception.Message)" }
     Write-Host ''
 }
 
@@ -660,7 +665,24 @@ function Invoke-Install {
     Write-Host ''
     Write-Host "    installed $appId $($result.Version)" -ForegroundColor Green
     Write-Host "    registered in $ManifestPath" -ForegroundColor DarkGray
+    try { Add-AppExecutableToPath -Entry $entry -Root $Root -Prompt }
+    catch { Write-Warning "Could not add $appId to PATH: $($_.Exception.Message)" }
     Write-Host ''
+}
+
+function Invoke-Path {
+    param($Manifest, [string]$Root)
+    if (-not $Name) { throw "path needs an installed app id, e.g. $script:CommandName path OrcaSlicer" }
+
+    foreach ($id in $Name) {
+        $entry = Get-ManagedApp -Manifest $Manifest -Id $id
+        if (-not $entry) {
+            $entry = [pscustomobject]@{ id = $id; name = $id; provider = 'portableapps' }
+        }
+        Write-Head "path $id"
+        Add-AppExecutableToPath -Entry $entry -Root $Root
+        Write-Host ''
+    }
 }
 
 function Invoke-Update {
@@ -1061,6 +1083,7 @@ function Invoke-Help {
         @('explain <url>',         'Show what would be inferred from a URL, and test it live'),
         @('add <url> -Id <app>',   'Register an already-present folder, without downloading'),
         @('install <name|url>',    'Add an app and install it into the PortableApps folder'),
+        @('path <app>',            'Add an installed app executable directory to user PATH'),
         @('update [app]',          'Check upstream and apply updates, prompting per app'),
         @('remove <app>',          'Uninstall an app and stop managing it'),
         @('categorize [-Import]',  'Sync apps.json categories with the Platform menu'),
@@ -1072,7 +1095,7 @@ function Invoke-Help {
         Write-Host $_[1] -ForegroundColor DarkGray
     }
     Write-Host ''
-    Write-Host '    Options: -DryRun -Yes -KeepData -NoBackup -Refresh -Bucket <b> -Id <folder>' -ForegroundColor DarkGray
+    Write-Host '    Options: -DryRun -Yes -AddToPath -KeepData -NoBackup -Refresh -Bucket <b> -Id <folder>' -ForegroundColor DarkGray
     Write-Host '             -WatchUrl <page> -VersionPattern <regex> -Preserve a,b -DisplayName <s>' -ForegroundColor DarkGray
     Write-Host '             -PortableAppsRoot <path> -DataDir <path> -TimeoutSec <n> -StaleDays <n>' -ForegroundColor DarkGray
     Write-Host ''
@@ -1097,6 +1120,7 @@ switch ($Command) {
     'explain'               { Invoke-Explain }
     'add'                   { Invoke-Add     -Manifest $manifest -Root $root }
     'install'               { Invoke-Install -Manifest $manifest -Root $root }
+    'path'                  { Invoke-Path    -Manifest $manifest -Root $root }
     'update'                { Invoke-Update  -Manifest $manifest -Root $root }
     'self-update'           { exit (Invoke-SelfUpdate -Manifest $manifest -Root $root) }
     'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }

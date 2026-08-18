@@ -12,7 +12,7 @@ This tool maintains those apps in parallel, without touching the Platform.
 
 ## Usage
 
-One entry point, eleven commands.
+One entry point, twelve commands.
 
 ```powershell
 cd App
@@ -23,6 +23,7 @@ cd App
 .\sideload.ps1 add <url> -Id MyApp   # register a folder you already have, no download
 .\sideload.ps1 install orcaslicer    # install by bucket name...
 .\sideload.ps1 install <url>         # ...or straight from a download URL
+.\sideload.ps1 path OrcaSlicer       # add an installed app to the user PATH
 .\sideload.ps1 update                # check everything, prompt per app
 .\sideload.ps1 remove UserBenchMark -KeepData
 .\sideload.ps1 categorize -Import    # pull Platform categories into apps.json
@@ -31,11 +32,17 @@ cd App
 .\sideload.ps1 restore OrcaSlicer -List
 ```
 
-Useful flags: `-DryRun`, `-Yes`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
+Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
 `-DisplayName`, `-WatchUrl`, `-VersionPattern`, `-Preserve`, `-Category`, `-PortableAppsRoot`,
 `-DataDir`, `-ConfigPath`, `-LocalConfigPath`.
 
 `update -DryRun` is the safe way to see where everything stands.
+
+After a successful install, sideloader asks whether the installed app's executable directory
+should be added to the current user's PATH. Use `-AddToPath` on `install` to add it without a
+prompt. `path <app>` adds an existing managed app, or an app folder already present directly
+under the PortableApps root, including standard PortableApps packages. The change applies to new
+terminals; existing terminals need to be reopened.
 
 ## Adding a source without touching the code
 
