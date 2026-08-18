@@ -77,7 +77,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$ProgressPreference    = 'SilentlyContinue'
+$ProgressPreference    = 'Continue'
 
 . (Join-Path $PSScriptRoot 'src\Common.ps1')
 . (Join-Path $PSScriptRoot 'src\Providers.ps1')
