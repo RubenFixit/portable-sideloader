@@ -149,7 +149,7 @@ default *and keeps receiving updates to it*. See `Data\config.local.example.json
 - **`settings`** — paths, timeouts, `staleDays`, user agent, and the 7-Zip search list (supports
   `%ENVVAR%` and a `<root>` placeholder for the PortableApps directory). Command-line parameters
   override these.
-- **`buckets`** — name, `manifestUrl` template, `indexRepo`, and a `rank` used to break search
+- **`buckets`** — name, `manifestUrl` template, `indexRepo`, optional `branch`, and a `rank` used to break search
   ties. Add your own bucket here and `search`/`install` pick it up.
 
 The shipped `RubenFixit` bucket points at this repository's `bucket\` directory. Put manifests

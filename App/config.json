@@ -42,6 +42,7 @@
     {
       "name": "RubenFixit",
       "indexRepo": "RubenFixit/portable-sideloader",
+      "branch": "main",
       "manifestUrl": "https://raw.githubusercontent.com/RubenFixit/portable-sideloader/main/bucket/{name}.json",
       "rank": -1
     }

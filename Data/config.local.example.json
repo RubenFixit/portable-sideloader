@@ -30,6 +30,7 @@
     {
       "name": "MyBucket",
       "indexRepo": "me/my-scoop-bucket",
+      "branch": "master",
       "manifestUrl": "https://raw.githubusercontent.com/me/my-scoop-bucket/master/bucket/{name}.json",
       "rank": 0
     }
