@@ -100,8 +100,7 @@ portable-sideloader\
     src\*.ps1
     Launcher\Launcher.cs
   Data\                     yours, never touched
-    apps.json               the registry (seeded on first run)
-    apps.seed.json          starting registry, registers this tool with itself
+    apps.json               the registry (self entry comes from config on first run)
     config.local.json       your overrides
     state.json  cache\  backups\  update\
 ```
@@ -178,8 +177,9 @@ the SHA-256 before writing it.
   available as `${name}`, alongside derived tokens `${assetRegex}`, `${filenameRegex}`,
   `${urlTemplate}` and `${watchUrl}`.
 
-`Data\apps.json` is the per-app registry — yours, untracked, seeded on first run from
-`apps.seed.json`. See `Data\apps.example.json` for the shape and the optional `exe` / `preserve` /
+`Data\apps.json` is the per-app registry — yours, untracked. On a fresh install, the built-in
+self entry from `App\config.json` is used until the registry is first written. See
+`Data\apps.example.json` for the shape and the optional `exe` / `preserve` /
 `category` / `hold` fields.
 
 ## Requirements
@@ -247,9 +247,8 @@ refused, since it can't overwrite files it's running from.
 
 ## It manages itself
 
-`Data\apps.json` is seeded on first run from `apps.seed.json`, which contains one entry: this tool.
-So `update` tracks portable-sideloader's own releases through the same `github` provider as
-everything else, and there is nothing to set up.
+`App\config.json` contains the built-in self entry, so a fresh install tracks portable-sideloader's
+own releases through the same `github` provider as everything else, and there is nothing to set up.
 
 The entry carries `"self": true`, which changes two things:
 

@@ -41,7 +41,7 @@ Copy-Item -LiteralPath (Join-Path $PackageRoot 'tools') -Destination $staging -R
 foreach ($doc in 'README.md', 'LICENSE') {
     Copy-Item -LiteralPath (Join-Path $PackageRoot $doc) -Destination $staging
 }
-foreach ($sample in 'apps.seed.json', 'apps.example.json', 'config.local.example.json') {
+foreach ($sample in 'apps.example.json', 'config.local.example.json') {
     Copy-Item -LiteralPath (Join-Path $PackageRoot "Data\$sample") -Destination (Join-Path $staging 'Data')
 }
 

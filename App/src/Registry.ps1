@@ -5,22 +5,16 @@
 
 function Get-AppManifest {
     <#
-        On first run the registry is seeded from apps.seed.json, which registers this tool with
-        itself. That way a fresh install tracks its own releases without anyone needing to know
-        to add the entry.
+        A missing registry starts empty except for the self entry defined in config.json. Existing
+        apps.json files remain authoritative and are never silently repopulated.
     #>
-    param([Parameter(Mandatory)][string]$Path, [string]$SeedPath)
+    param([Parameter(Mandatory)][string]$Path, $Config)
 
     if (-not (Test-Path -LiteralPath $Path)) {
-        if ($SeedPath -and (Test-Path -LiteralPath $SeedPath)) {
-            $dir = Split-Path -Parent $Path
-            if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-                New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            }
-            Copy-Item -LiteralPath $SeedPath -Destination $Path -Force
-            Write-Verbose "Seeded $Path from $SeedPath"
-        } else {
-            return [pscustomobject]@{ portableAppsRoot = $null; apps = @() }
+        $self = Get-Prop $Config 'selfApp'
+        return [pscustomobject]@{
+            portableAppsRoot = $null
+            apps = if ($self) { @($self) } else { @() }
         }
     }
     return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)

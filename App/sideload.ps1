@@ -1080,7 +1080,7 @@ function Invoke-Help {
 
 if ($Command -eq 'help') { Invoke-Help; return }
 
-$manifest = Get-AppManifest -Path $ManifestPath -SeedPath (Join-Path $DataDir 'apps.seed.json')
+$manifest = Get-AppManifest -Path $ManifestPath -Config $script:Cfg
 $rootHint = Get-Prop $manifest 'portableAppsRoot'
 if (-not $rootHint) { $rootHint = Get-Setting $script:Cfg 'portableAppsRoot' }
 $root = Resolve-PortableAppsRoot -Explicit $PortableAppsRoot -FromManifest $rootHint

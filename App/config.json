@@ -21,6 +21,19 @@
     ]
   },
 
+  "selfApp": {
+    "id": "PortableSideloader",
+    "name": "portable-sideloader",
+    "provider": "github",
+    "source": {
+      "repo": "RubenFixit/portable-sideloader",
+      "assetPattern": "^PortableSideloader-\\d+\\.\\d+\\.\\d+\\.zip$"
+    },
+    "self": true,
+    "category": "Utilities",
+    "notes": "Self-updates are staged into Data\\update\\ and applied by the launcher before the next update pass."
+  },
+
   "buckets": [
     {
       "name": "Main",
