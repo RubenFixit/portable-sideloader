@@ -10,6 +10,27 @@ the directory yourself are silently skipped forever.
 
 This tool maintains those apps in parallel, without touching the Platform.
 
+## Initial installation
+
+Download the latest release ZIP from the [GitHub Releases page](https://github.com/RubenFixit/portable-sideloader/releases), then extract its `PortableSideloader\` folder directly under the PortableApps directory:
+
+```text
+C:\Users\<you>\PortableApps\PortableApps\PortableSideloader\
+  PortableSideloader.exe
+  App\
+  Data\
+  tools\
+```
+
+Run the launcher once from that folder:
+
+```powershell
+cd C:\Users\<you>\PortableApps\PortableApps\PortableSideloader
+.\PortableSideloader.exe
+```
+
+On first launch it creates `Data\`, discovers the surrounding PortableApps directory, and registers PortableSideloader in its local app registry. It is a sideloaded utility, not a PAF installer, so launch it directly or create a shortcut to `PortableSideloader.exe` in the PortableApps menu. Your personal registry and settings remain in `Data\` and are not included in release packages.
+
 ## Usage
 
 One entry point, twelve commands.
