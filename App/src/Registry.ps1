@@ -4,9 +4,24 @@
 # Which buckets exist, and where their manifests live, comes from config.json.
 
 function Get-AppManifest {
-    param([Parameter(Mandatory)][string]$Path)
+    <#
+        On first run the registry is seeded from apps.seed.json, which registers this tool with
+        itself. That way a fresh install tracks its own releases without anyone needing to know
+        to add the entry.
+    #>
+    param([Parameter(Mandatory)][string]$Path, [string]$SeedPath)
+
     if (-not (Test-Path -LiteralPath $Path)) {
-        return [pscustomobject]@{ portableAppsRoot = $null; apps = @() }
+        if ($SeedPath -and (Test-Path -LiteralPath $SeedPath)) {
+            $dir = Split-Path -Parent $Path
+            if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            }
+            Copy-Item -LiteralPath $SeedPath -Destination $Path -Force
+            Write-Verbose "Seeded $Path from $SeedPath"
+        } else {
+            return [pscustomobject]@{ portableAppsRoot = $null; apps = @() }
+        }
     }
     return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
 }

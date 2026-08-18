@@ -94,10 +94,12 @@ portable-sideloader\
   App\                      replaced wholesale on update
     sideload.ps1
     config.json             shipped defaults
+    VERSION                 what `update` compares against for itself
     src\*.ps1
     Launcher\Launcher.cs
   Data\                     yours, never touched
-    apps.json               the registry
+    apps.json               the registry (seeded on first run)
+    apps.seed.json          starting registry, registers this tool with itself
     config.local.json       your overrides
     state.json  cache\  backups\  update\
 ```
@@ -181,6 +183,28 @@ Harvesting Scoop's manifests rather than installing Scoop is intentional: it bor
 community's version tracking for most of the list while keeping this folder self-contained and
 copyable to a USB stick.
 
+## It manages itself
+
+`Data\apps.json` is seeded on first run from `apps.seed.json`, which contains one entry: this tool.
+So `update` tracks portable-sideloader's own releases through the same `github` provider as
+everything else, and there is nothing to set up.
+
+The entry carries `"self": true`, which changes two things:
+
+- **The installed version comes from `App\VERSION`**, not from sniffing a binary.
+- **Updates are staged, not swapped.** This process holds `App\*.ps1` open and the launcher holds
+  the `.exe`, so a normal in-place swap would fail or corrupt the install. Instead the payload
+  lands in `Data\update\`, and the launcher applies it on next start — before anything is loaded.
+
+```
+PortableSideloader  0.0.1 -> 0.1.0  UpdateAvailable
+    staged 0.1.0 - restart PortableSideloader to apply
+```
+
+On the next launch the stub swaps `App\`, refreshes the root files, renames itself aside for the
+new binary, and leaves `Data\` alone. Delete the entry from `apps.json` if you would rather update
+it by hand.
+
 ## Menu categories (and why PAF wrapping isn't worth it)
 
 A sideloaded app shows up under **Other** after a menu refresh, and recategorising it is a one-time
@@ -258,7 +282,7 @@ out so you go check the rule rather than assuming all is well. Needs a few runs 
 - [x] Menu category sync, both directions
 - [x] `App\` / `Data\` split with layered config
 - [x] Launcher stub + staged-update swap, for **Start Automatically**
-- [ ] Self-update: cut releases and add this tool to its own `apps.json`
+- [x] Self-update — the tool is registered in its own registry and stages its own releases
 - [ ] Custom rules for the remaining `todo` apps (MiniTool Partition Wizard, PortableRegistrator)
 - [ ] Per-app version normalisers, for sources like Sublime that report `4-4200` vs `4200`
 - [ ] `restore` command to roll back from `backups/`

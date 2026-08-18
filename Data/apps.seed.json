@@ -1,0 +1,20 @@
+{
+  "_comment": "Copied to apps.json on first run. It registers this tool with itself, so portable-sideloader is updated by the same machinery as everything else. Delete the entry if you would rather update it by hand.",
+
+  "portableAppsRoot": null,
+
+  "apps": [
+    {
+      "id": "PortableSideloader",
+      "name": "portable-sideloader",
+      "provider": "github",
+      "source": {
+        "repo": "RubenFixit/portable-sideloader",
+        "assetPattern": "^PortableSideloader-\\d+\\.\\d+\\.\\d+\\.zip$"
+      },
+      "self": true,
+      "category": "Utilities",
+      "notes": "self:true means updates are staged into Data\\update\\ and applied by the launcher on next start, because a running process cannot overwrite its own files. The installed version is read from App\\VERSION."
+    }
+  ]
+}

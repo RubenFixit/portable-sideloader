@@ -80,6 +80,7 @@ $ProgressPreference    = 'SilentlyContinue'
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
+$script:PackageRoot = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path -LiteralPath $DataDir)) { New-Item -ItemType Directory -Path $DataDir -Force | Out-Null }
 if (-not $LocalConfigPath) { $LocalConfigPath = Join-Path $DataDir 'config.local.json' }
 if (-not $ManifestPath)    { $ManifestPath    = Join-Path $DataDir 'apps.json' }
@@ -152,12 +153,52 @@ function Resolve-Upstream {
     }
 }
 
+function Test-SelfEntry {
+    param($Entry)
+    return [bool](Get-Prop $Entry 'self' $false)
+}
+
+function Get-AppFolder {
+    # A self entry owns the package this script is running from, wherever that happens to be -
+    # a dev checkout outside the PortableApps tree still resolves correctly.
+    param($Entry, [string]$Root)
+    if (Test-SelfEntry $Entry) { return $script:PackageRoot }
+    return (Join-Path $Root $Entry.id)
+}
+
 function Get-AppRow {
     param($Entry, [string]$Root, [switch]$Online)
 
     $id     = $Entry.id
     $name   = Get-Prop $Entry 'name' $id
-    $appDir = Join-Path $Root $id
+    $appDir = Get-AppFolder -Entry $Entry -Root $Root
+
+    # Our own version is shipped in App\VERSION rather than sniffed from a binary.
+    if (Test-SelfEntry $Entry) {
+        # Fall back to 0 rather than $null when VERSION is absent. A null would report NoBaseline,
+        # which never triggers an update - so a build that shipped without the file could never
+        # replace itself. Reporting 0 makes any release newer, and the next update self-heals.
+        $versionFile = Join-Path $PSScriptRoot 'VERSION'
+        $selfVersion = if (Test-Path -LiteralPath $versionFile) {
+            (Get-Content -LiteralPath $versionFile -Raw).Trim()
+        } else { '0' }
+        $selfFrom = if (Test-Path -LiteralPath $versionFile) { 'App\VERSION' }
+                    else { 'App\VERSION missing, assuming 0' }
+
+        $selfUp = if ($Online) { Resolve-Upstream -Entry $Entry } else { $null }
+        return [pscustomobject]@{
+            App = $id; Name = $name; AppDir = $appDir
+            Installed = $selfVersion
+            InstalledFrom = $selfFrom
+            Heuristic = $false
+            Latest = if ($selfUp) { $selfUp.Version } else { $null }
+            Status = if ($Online) { Compare-AppVersion -Installed $selfVersion -Latest $selfUp.Version } else { 'Local' }
+            Detail = if ($selfUp) { $selfUp.Error } else { '' }
+            Provider = Get-Prop $Entry 'provider' 'todo'
+            Upstream = $selfUp
+            Notes = Get-Prop $Entry 'notes' ''
+        }
+    }
 
     $installed = $null; $from = ''; $heuristic = $false
     if (Test-Path -LiteralPath $appDir) {
@@ -227,7 +268,7 @@ function Invoke-AppInstall {
     param($Entry, $Upstream, [string]$Root, [switch]$IsUpdate)
 
     $id     = $Entry.id
-    $appDir = Join-Path $Root $id
+    $appDir = Get-AppFolder -Entry $Entry -Root $Root
 
     # The Platform keys categories, renames and hidden flags by "folder\exe.exe", so an update
     # that renames the executable silently drops all three back to default.
@@ -249,6 +290,20 @@ function Invoke-AppInstall {
     Write-Host '    extracting...' -ForegroundColor DarkGray
     $extracted = Expand-Package -ArchivePath $archive -DestinationDir $stagingDir -SevenZip $sevenZip
     $payload   = Resolve-PayloadRoot -Dir $extracted
+
+    # Updating ourselves cannot swap in place: this process holds App\*.ps1 and the launcher holds
+    # the .exe. Stage the payload instead and let the launcher apply it before anything loads.
+    if (Test-SelfEntry $Entry) {
+        $updateDir = Join-Path $DataDir 'update'
+        if (Test-Path -LiteralPath $updateDir) { Remove-Item -LiteralPath $updateDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
+        Copy-DirectoryContent -Source $payload -Destination $updateDir
+        Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{
+            Version = $Upstream.Version; Backup = $null; Preserved = @()
+            RenamedExe = $null; Staged = $updateDir
+        }
+    }
 
     $backup = $null
     if ($IsUpdate -and -not $NoBackup) {
@@ -275,7 +330,8 @@ function Invoke-AppInstall {
     }
 
     return [pscustomobject]@{
-        Version = $Upstream.Version; Backup = $backup; Preserved = $kept; RenamedExe = $renamedExe
+        Version = $Upstream.Version; Backup = $backup; Preserved = $kept
+        RenamedExe = $renamedExe; Staged = $null
     }
 }
 
@@ -655,6 +711,11 @@ function Invoke-Update {
         $entry = Get-ManagedApp -Manifest $Manifest -Id $r.App
         try {
             $result = Invoke-AppInstall -Entry $entry -Upstream $r.Upstream -Root $Root -IsUpdate
+            if ($result.Staged) {
+                Write-Host "    staged $($result.Version) - restart PortableSideloader to apply" -ForegroundColor Cyan
+                Write-Host "    staged at: $($result.Staged)" -ForegroundColor DarkGray
+                continue
+            }
             Write-Host "    updated to $($result.Version)" -ForegroundColor Green
             if ($result.Backup) { Write-Host "    backup: $($result.Backup)" -ForegroundColor DarkGray }
             if ($result.RenamedExe) {
@@ -833,7 +894,7 @@ function Invoke-Help {
 
 if ($Command -eq 'help') { Invoke-Help; return }
 
-$manifest = Get-AppManifest -Path $ManifestPath
+$manifest = Get-AppManifest -Path $ManifestPath -SeedPath (Join-Path $DataDir 'apps.seed.json')
 $rootHint = Get-Prop $manifest 'portableAppsRoot'
 if (-not $rootHint) { $rootHint = Get-Setting $script:Cfg 'portableAppsRoot' }
 $root = Resolve-PortableAppsRoot -Explicit $PortableAppsRoot -FromManifest $rootHint

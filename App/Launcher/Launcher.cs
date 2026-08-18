@@ -93,9 +93,20 @@ internal static class Launcher
             Console.WriteLine("  applied staged update to App\\");
         }
 
+        // Loose files at the package root - README, LICENSE, build.ps1 - so an update refreshes
+        // everything except the stub, which needs the rename dance below, and Data\, which is
+        // yours and must never be overwritten.
+        string stubName = Path.GetFileName(exePath);
+        foreach (string staged in Directory.GetFiles(staging))
+        {
+            string name = Path.GetFileName(staged);
+            if (string.Equals(name, stubName, StringComparison.OrdinalIgnoreCase)) continue;
+            TryQuietly(() => File.Copy(staged, Path.Combine(root, name), true));
+        }
+
         // The stub itself cannot be overwritten while it is running, but it CAN be renamed - so
         // move ourselves aside and drop the new one in. It takes effect on the next launch.
-        string stagedStub = Path.Combine(staging, Path.GetFileName(exePath));
+        string stagedStub = Path.Combine(staging, stubName);
         if (File.Exists(stagedStub))
         {
             File.Move(exePath, exePath + ".old");
