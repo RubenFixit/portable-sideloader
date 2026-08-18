@@ -151,6 +151,11 @@ default *and keeps receiving updates to it*. See `Data\config.local.example.json
   override these.
 - **`buckets`** — name, `manifestUrl` template, `indexRepo`, and a `rank` used to break search
   ties. Add your own bucket here and `search`/`install` pick it up.
+
+The shipped `RubenFixit` bucket points at this repository's `bucket\` directory. Put manifests
+there for apps that are not in Scoop yet; they become available to `search` and `install` after
+the bucket index refreshes. A clean manifest can later be proposed to Scoop Main or Extras without
+changing the sideloader entry that records the installed folder and preserved data.
 - **`versionPatterns`** — the ordered regex library used to spot a version. First hit wins, so put
   your own at the top. Use `(?: )` for grouping; numbered groups would break the derived regexes.
 - **`hosts`** — ordered rules matched against a download URL to pick a provider. Named captures are

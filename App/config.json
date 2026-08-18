@@ -38,6 +38,12 @@
       "indexRepo": "ScoopInstaller/Versions",
       "manifestUrl": "https://raw.githubusercontent.com/ScoopInstaller/Versions/master/bucket/{name}.json",
       "rank": 2
+    },
+    {
+      "name": "RubenFixit",
+      "indexRepo": "RubenFixit/portable-sideloader",
+      "manifestUrl": "https://raw.githubusercontent.com/RubenFixit/portable-sideloader/main/bucket/{name}.json",
+      "rank": -1
     }
   ],
 

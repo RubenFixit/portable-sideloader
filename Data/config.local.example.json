@@ -25,7 +25,7 @@
     { "name": "year-build", "regex": "20\\d{2}b\\d+" }
   ],
 
-  "_bucketsNote": "Add a private bucket, or replace a shipped one by reusing its name.",
+  "_bucketsNote": "RubenFixit is shipped as the personal bucket. Add another private bucket here, or replace a shipped one by reusing its name.",
   "buckets": [
     {
       "name": "MyBucket",
