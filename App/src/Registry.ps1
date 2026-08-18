@@ -70,7 +70,7 @@ function Get-BucketIndex {
         try {
             $cached = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
             $age = (New-TimeSpan -Start ([datetime]$cached.fetchedUtc) -End (Get-Date).ToUniversalTime()).TotalHours
-            if ($age -lt $MaxAgeHours) { return , @($cached.entries) }
+            if ($age -lt $MaxAgeHours) { return , ([object[]]@($cached.entries)) }
         } catch {
             Write-Verbose "Bucket cache unreadable, refetching: $($_.Exception.Message)"
         }
@@ -110,7 +110,9 @@ function Get-BucketIndex {
         entries    = $entries
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $CachePath -Encoding UTF8
 
-    return , @($entries)
+    # Cast off the generic List first: ",@($list)" throws "Argument types do not match".
+    # This is the cold-cache path, so the bug only ever showed up on a first run.
+    return , ([object[]]$entries.ToArray())
 }
 
 function Find-BucketManifest {

@@ -42,7 +42,8 @@
       "exe": "ExampleApp.exe",
       "preserve": ["Data", "profiles"],
       "category": "Utilities",
-      "notes": "exe pins which executable is used for version detection and the Platform menu key. preserve lists folders to carry across an update, overriding the Scoop manifest's persist."
+      "hold": "why this app is never updated automatically",
+      "notes": "exe pins which executable is used for version detection and the Platform menu key. preserve lists folders to carry across an update, overriding the Scoop manifest's persist. hold may be true or a reason string: the app is still checked and reported, but never updated without -Force - use it when upstream tracks a different edition than the one you run."
     }
   ]
 }

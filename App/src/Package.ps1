@@ -192,6 +192,47 @@ function Backup-App {
     return $target
 }
 
+function Get-AppBackups {
+    # Newest first. Timestamps are the folder names written by Backup-App.
+    param([Parameter(Mandatory)][string]$BackupRoot, [Parameter(Mandatory)][string]$Id)
+
+    $dir = Join-Path $BackupRoot $Id
+    if (-not (Test-Path -LiteralPath $dir)) { return @() }
+
+    return @(Get-ChildItem -LiteralPath $dir -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        ForEach-Object {
+            $bytes = (Get-ChildItem -LiteralPath $_.FullName -Recurse -File -ErrorAction SilentlyContinue |
+                Measure-Object -Property Length -Sum).Sum
+            [pscustomobject]@{
+                Timestamp = $_.Name
+                Path      = $_.FullName
+                SizeMB    = [math]::Round(([double]$bytes) / 1MB, 1)
+            }
+        })
+}
+
+function Restore-AppBackup {
+    <#
+        Replaces the app folder with a backup wholesale - user data included, because rolling back
+        a bad update usually means wanting the state that worked. The caller takes a fresh backup
+        of the current folder first, so a restore is itself reversible.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$BackupPath,
+        [Parameter(Mandatory)][string]$AppDir
+    )
+
+    if (-not (Test-Path -LiteralPath $BackupPath)) { throw "Backup not found: $BackupPath" }
+
+    if (Test-Path -LiteralPath $AppDir) {
+        Get-ChildItem -LiteralPath $AppDir -Force | Remove-Item -Recurse -Force
+    } else {
+        New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
+    }
+    Copy-DirectoryContent -Source $BackupPath -Destination $AppDir
+}
+
 function Install-Payload {
     <#
         Replaces the app's program files while preserving user data. Preserved paths are moved

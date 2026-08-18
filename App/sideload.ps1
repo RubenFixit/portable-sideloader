@@ -30,7 +30,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'update', 'remove', 'categorize', 'help')]
+    [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'update', 'remove',
+                 'categorize', 'hold', 'unhold', 'restore', 'help')]
     [string]   $Command = 'help',
 
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
@@ -58,7 +59,10 @@ param(
     [string]   $VersionPattern,
     [string[]] $Preserve,
     [string]   $Category,
+    [string]   $Reason,
 
+    [switch]   $List,
+    [switch]   $Force,
     [switch]   $Import,
     [switch]   $DryRun,
     [switch]   $Yes,
@@ -158,6 +162,24 @@ function Test-SelfEntry {
     return [bool](Get-Prop $Entry 'self' $false)
 }
 
+function Get-HoldInfo {
+    <#
+        "hold" may be true, or a string explaining why. A held app is still checked and reported -
+        you want to know a release exists - but it is never offered for update without -Force.
+
+        The case this exists for: the Scoop manifest for MobaXterm tracks the freeware Home
+        edition, so updating a licensed Pro install would quietly replace it with a different
+        product.
+    #>
+    param($Entry)
+    $hold = Get-Prop $Entry 'hold' $null
+    if ($null -eq $hold -or $hold -eq $false) {
+        return [pscustomobject]@{ Held = $false; Reason = '' }
+    }
+    $reason = if ($hold -is [string]) { $hold } else { '' }
+    return [pscustomobject]@{ Held = $true; Reason = $reason }
+}
+
 function Get-AppFolder {
     # A self entry owns the package this script is running from, wherever that happens to be -
     # a dev checkout outside the PortableApps tree still resolves correctly.
@@ -186,6 +208,7 @@ function Get-AppRow {
                     else { 'App\VERSION missing, assuming 0' }
 
         $selfUp = if ($Online) { Resolve-Upstream -Entry $Entry } else { $null }
+        $selfHold = Get-HoldInfo -Entry $Entry
         return [pscustomobject]@{
             App = $id; Name = $name; AppDir = $appDir
             Installed = $selfVersion
@@ -197,6 +220,7 @@ function Get-AppRow {
             Provider = Get-Prop $Entry 'provider' 'todo'
             Upstream = $selfUp
             Notes = Get-Prop $Entry 'notes' ''
+            Held = $selfHold.Held; HoldReason = $selfHold.Reason
         }
     }
 
@@ -222,6 +246,7 @@ function Get-AppRow {
     $detail = if ($up) { $up.Error } else { '' }
     if ($status -eq 'NoBaseline' -and -not $detail) { $detail = $from }
 
+    $hold = Get-HoldInfo -Entry $Entry
     return [pscustomobject]@{
         App = $id; Name = $name; AppDir = $appDir
         Installed = $installed; InstalledFrom = $from; Heuristic = $heuristic
@@ -230,6 +255,7 @@ function Get-AppRow {
         Provider = Get-Prop $Entry 'provider' 'todo'
         Upstream = $up
         Notes = Get-Prop $Entry 'notes' ''
+        Held = $hold.Held; HoldReason = $hold.Reason
     }
 }
 
@@ -243,6 +269,10 @@ function Write-Row {
     Write-Host ("  {0}  " -f $Row.App.PadRight($Width)) -NoNewline
     Write-Host ("{0}  ->  {1}  " -f $inst.PadRight(24), $late.PadRight(16)) -NoNewline -ForegroundColor Gray
     Write-Host $Row.Status -NoNewline -ForegroundColor $script:StatusColor[$Row.Status]
+    if ($Row.Held) {
+        Write-Host '  HELD' -NoNewline -ForegroundColor Cyan
+        if ($Row.HoldReason) { Write-Host " ($($Row.HoldReason))" -NoNewline -ForegroundColor DarkCyan }
+    }
     if ($Row.Detail) { Write-Host "  ($($Row.Detail))" -NoNewline -ForegroundColor DarkGray }
     Write-Host ''
 }
@@ -687,7 +717,15 @@ function Invoke-Update {
     }
     Write-Host ''
 
-    $actionable = @($rows | Where-Object { $_.Status -eq 'UpdateAvailable' -and $_.Upstream.Url })
+    $withUpdates = @($rows | Where-Object { $_.Status -eq 'UpdateAvailable' -and $_.Upstream.Url })
+    $heldBack    = @($withUpdates | Where-Object { $_.Held })
+    $actionable  = if ($Force) { $withUpdates } else { @($withUpdates | Where-Object { -not $_.Held }) }
+
+    if ($heldBack.Count -gt 0 -and -not $Force) {
+        Write-Host ''
+        Write-Host "  $($heldBack.Count) held app(s) have updates and will be skipped: $(($heldBack | ForEach-Object { $_.App }) -join ', ')" -ForegroundColor Cyan
+        Write-Host "  Use -Force to update them anyway, or 'unhold <app>' to stop holding." -ForegroundColor DarkGray
+    }
     if ($DryRun) {
         Write-Host ''
         Write-Host "  -DryRun: $($actionable.Count) app(s) could be updated. Nothing was modified." -ForegroundColor DarkGray
@@ -864,6 +902,100 @@ function Invoke-Categorize {
     Write-Host ''
 }
 
+function Invoke-Hold {
+    param($Manifest, [string]$Root, [switch]$Off)
+    if (-not $Name) { throw "$(if ($Off) { 'unhold' } else { 'hold' }) needs an app id. Try: .\sideload.ps1 ls" }
+
+    Write-Head $(if ($Off) { 'release hold' } else { 'hold' })
+    $changed = 0
+    foreach ($n in $Name) {
+        $entry = Get-ManagedApp -Manifest $Manifest -Id $n
+        if (-not $entry) { Write-Warning "'$n' is not managed."; continue }
+
+        if ($Off) {
+            if (-not (Get-HoldInfo -Entry $entry).Held) {
+                Write-Host "  $n was not held" -ForegroundColor DarkGray
+                continue
+            }
+            $entry.PSObject.Properties.Remove('hold')
+            Write-Host "  $n released - it will be offered for update again" -ForegroundColor Green
+        } else {
+            $value = if ($Reason) { $Reason } else { $true }
+            $entry | Add-Member -NotePropertyName 'hold' -NotePropertyValue $value -Force
+            Write-Host "  $n held$(if ($Reason) { " - $Reason" })" -ForegroundColor Cyan
+        }
+        $changed++
+    }
+
+    if ($changed -gt 0 -and -not $DryRun) {
+        Save-AppManifest -Manifest $Manifest -Path $ManifestPath
+        Write-Host ''
+        Write-Host "  saved to $ManifestPath" -ForegroundColor DarkGray
+    } elseif ($DryRun) {
+        Write-Host ''
+        Write-Host '  -DryRun: nothing written.' -ForegroundColor DarkGray
+    }
+    Write-Host ''
+}
+
+function Invoke-Restore {
+    param($Manifest, [string]$Root)
+    if (-not $Name) { throw "restore needs an app id, e.g. .\sideload.ps1 restore OrcaSlicer" }
+
+    $id = $Name[0]
+    $entry = Get-ManagedApp -Manifest $Manifest -Id $id
+    if (-not $entry) { throw "'$id' is not managed. Try: .\sideload.ps1 ls" }
+    if (Test-SelfEntry $entry) {
+        throw "Cannot restore '$id' over itself while it is running. Install an older release instead, or unpack a backup by hand."
+    }
+
+    $backups = @(Get-AppBackups -BackupRoot $BackupRoot -Id $id)
+    Write-Head "restore $id"
+
+    if ($backups.Count -eq 0) {
+        Write-Host "  No backups under $(Join-Path $BackupRoot $id)" -ForegroundColor DarkGray
+        Write-Host '  Backups are written automatically before each update, unless -NoBackup.' -ForegroundColor DarkGray
+        Write-Host ''
+        return
+    }
+
+    foreach ($b in $backups) {
+        $marker = if ($b.Timestamp -eq $backups[0].Timestamp) { ' <- newest' } else { '' }
+        Write-Host ("  {0}  {1,7:N1} MB{2}" -f $b.Timestamp, $b.SizeMB, $marker) -ForegroundColor Gray
+    }
+    Write-Host ''
+
+    if ($List) { Write-Host "  restore with: .\sideload.ps1 restore $id $($backups[0].Timestamp)" -ForegroundColor DarkGray; Write-Host ''; return }
+
+    $wanted = if ($Name.Count -gt 1) { $Name[1] } else { $backups[0].Timestamp }
+    $chosen = $backups | Where-Object { $_.Timestamp -eq $wanted } | Select-Object -First 1
+    if (-not $chosen) { throw "No backup '$wanted' for $id. Use -List to see what exists." }
+
+    $appDir = Get-AppFolder -Entry $entry -Root $Root
+    Write-Host "    from  $($chosen.Path)"
+    Write-Host "    into  $appDir"
+    Write-Host '    the whole folder is replaced, user data included - that is what a rollback means' -ForegroundColor DarkGray
+    Write-Host ''
+
+    if ($DryRun) { Write-Host '    -DryRun: nothing changed.' -ForegroundColor DarkGray; Write-Host ''; return }
+    if (-not (Confirm-Action "Roll $id back to $($chosen.Timestamp)?")) {
+        Write-Host '    cancelled' -ForegroundColor DarkGray; Write-Host ''; return
+    }
+
+    # Back up the current state first, so a restore is itself reversible.
+    $safety = $null
+    if (-not $NoBackup) {
+        Write-Host '    backing up current state...' -ForegroundColor DarkGray
+        $safety = Backup-App -AppDir $appDir -BackupRoot $BackupRoot -Id $id
+    }
+
+    Restore-AppBackup -BackupPath $chosen.Path -AppDir $appDir
+
+    Write-Host "    restored $id from $($chosen.Timestamp)" -ForegroundColor Green
+    if ($safety) { Write-Host "    previous state saved at: $safety" -ForegroundColor DarkGray }
+    Write-Host ''
+}
+
 function Invoke-Help {
     Write-Head 'portable-sideloader'
     @(
@@ -875,7 +1007,10 @@ function Invoke-Help {
         @('install <name|url>',    'Add an app and install it into the PortableApps folder'),
         @('update [app]',          'Check upstream and apply updates, prompting per app'),
         @('remove <app>',          'Uninstall an app and stop managing it'),
-        @('categorize [-Import]',  'Sync apps.json categories with the Platform menu')
+        @('categorize [-Import]',  'Sync apps.json categories with the Platform menu'),
+        @('hold <app> -Reason x',  'Report updates for an app but never apply them'),
+        @('unhold <app>',          'Stop holding an app'),
+        @('restore <app> [stamp]', 'Roll back to a backup (-List to see them)')
     ) | ForEach-Object {
         Write-Host ("    {0}  " -f $_[0].PadRight(22)) -NoNewline -ForegroundColor White
         Write-Host $_[1] -ForegroundColor DarkGray
@@ -909,4 +1044,7 @@ switch ($Command) {
     'update'                { Invoke-Update  -Manifest $manifest -Root $root }
     'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }
     'categorize'            { Invoke-Categorize -Manifest $manifest -Root $root }
+    'hold'                  { Invoke-Hold    -Manifest $manifest -Root $root }
+    'unhold'                { Invoke-Hold    -Manifest $manifest -Root $root -Off }
+    'restore'               { Invoke-Restore -Manifest $manifest -Root $root }
 }

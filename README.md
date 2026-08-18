@@ -12,7 +12,7 @@ This tool maintains those apps in parallel, without touching the Platform.
 
 ## Usage
 
-One entry point, eight commands.
+One entry point, eleven commands.
 
 ```powershell
 cd App
@@ -27,6 +27,8 @@ cd App
 .\sideload.ps1 remove UserBenchMark -KeepData
 .\sideload.ps1 categorize -Import    # pull Platform categories into apps.json
 .\sideload.ps1 categorize            # push apps.json categories to the Platform
+.\sideload.ps1 hold MobaXterm -Reason "licensed edition"
+.\sideload.ps1 restore OrcaSlicer -List
 ```
 
 Useful flags: `-DryRun`, `-Yes`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
@@ -113,7 +115,7 @@ which is also how you point two checkouts at one registry.
 .\build.ps1
 ```
 
-Compiles `PortableSideloader.exe` (7.7 KB) using the `csc.exe` that ships with Windows — no SDK, no
+Compiles `PortableSideloader.exe` (~8 KB) using the `csc.exe` that ships with Windows — no SDK, no
 package manager, no admin. Drop the folder into your PortableApps directory and the Platform picks
 up the exe; right-click it and tick **Start Automatically** for prompt-on-launch.
 
@@ -155,8 +157,9 @@ default *and keeps receiving updates to it*. See `Data\config.local.example.json
   available as `${name}`, alongside derived tokens `${assetRegex}`, `${filenameRegex}`,
   `${urlTemplate}` and `${watchUrl}`.
 
-`Data\apps.json` is the per-app registry — yours, untracked, and created on first `install`. See
-`Data\apps.example.json` for the shape and the optional `exe` / `preserve` / `category` fields.
+`Data\apps.json` is the per-app registry — yours, untracked, seeded on first run from
+`apps.seed.json`. See `Data\apps.example.json` for the shape and the optional `exe` / `preserve` /
+`category` / `hold` fields.
 
 ## Requirements
 
@@ -182,6 +185,44 @@ gets distributed to other people, Mark-of-the-Web and ExecutionPolicy friction o
 Harvesting Scoop's manifests rather than installing Scoop is intentional: it borrows the
 community's version tracking for most of the list while keeping this folder self-contained and
 copyable to a USB stick.
+
+## Holding an app back
+
+Some apps must never be updated automatically, because upstream tracks a *different product* than
+the one you run. The Scoop manifest for MobaXterm points at `MobaXterm_Portable_v26.4.zip`, license
+`Freeware` — the Home edition. Accepting that update on a licensed Pro install would quietly
+replace it.
+
+```powershell
+.\sideload.ps1 hold MobaXterm_Pro_Portable -Reason "licensed Pro edition; upstream tracks Home"
+```
+
+A held app is still checked and reported — you want to know a release exists — but never applied:
+
+```
+MobaXterm_Pro_Portable  23.2*  ->  26.4  UpdateAvailable  HELD (licensed Pro edition; upstream tracks Home)
+
+  1 held app(s) have updates and will be skipped: MobaXterm_Pro_Portable
+  Use -Force to update them anyway, or 'unhold <app>' to stop holding.
+```
+
+`hold` with no `-Reason` sets `"hold": true`; with one it stores the string and prints it every
+time, so the reason survives longer than your memory of it.
+
+## Rolling back
+
+Every update writes the whole app folder to `Data\backups\<id>\<timestamp>\` first, unless
+`-NoBackup`.
+
+```powershell
+.\sideload.ps1 restore OrcaSlicer -List      # what's available
+.\sideload.ps1 restore OrcaSlicer            # newest
+.\sideload.ps1 restore OrcaSlicer 20260817-212338
+```
+
+The folder is replaced wholesale, user data included — that's what a rollback means. The current
+state is backed up first, so the restore is itself reversible. Restoring the tool over itself is
+refused, since it can't overwrite files it's running from.
 
 ## It manages itself
 
@@ -283,9 +324,10 @@ out so you go check the rule rather than assuming all is well. Needs a few runs 
 - [x] `App\` / `Data\` split with layered config
 - [x] Launcher stub + staged-update swap, for **Start Automatically**
 - [x] Self-update — the tool is registered in its own registry and stages its own releases
+- [x] `hold` for apps upstream tracks a different edition of
+- [x] `restore` for rolling back from backups
 - [ ] Custom rules for the remaining `todo` apps (MiniTool Partition Wizard, PortableRegistrator)
 - [ ] Per-app version normalisers, for sources like Sublime that report `4-4200` vs `4200`
-- [ ] `restore` command to roll back from `backups/`
 - [ ] `[AppsRenamed]` / `[AppsHidden]` sync, same mechanism as categories
 - ~~PAF wrapping~~ — dropped; see the categories section for why it would cost more than it gives
 
@@ -307,4 +349,7 @@ provider and bucket indexing need it; manifest reads are raw files and aren't ra
 ## License
 
 MIT
+
+
+
 
