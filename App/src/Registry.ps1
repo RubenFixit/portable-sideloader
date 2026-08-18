@@ -60,11 +60,24 @@ function Get-BucketIndex {
         [int]$TimeoutSec = 30
     )
 
+    $bucketSignature = @(
+        foreach ($bucket in @(Get-Prop $Config 'buckets')) {
+            @(
+                [string](Get-Prop $bucket 'name')
+                [string](Get-Prop $bucket 'indexRepo')
+                [string](Get-Prop $bucket 'branch' 'master')
+                [string](Get-Prop $bucket 'manifestUrl')
+            ) -join '|'
+        }
+    ) -join "`n"
+
     if (-not $Force -and (Test-Path -LiteralPath $CachePath)) {
         try {
             $cached = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
             $age = (New-TimeSpan -Start ([datetime]$cached.fetchedUtc) -End (Get-Date).ToUniversalTime()).TotalHours
-            if ($age -lt $MaxAgeHours) { return , ([object[]]@($cached.entries)) }
+            if ($age -lt $MaxAgeHours -and (Get-Prop $cached 'bucketSignature') -eq $bucketSignature) {
+                return , ([object[]]@($cached.entries))
+            }
         } catch {
             Write-Verbose "Bucket cache unreadable, refetching: $($_.Exception.Message)"
         }
@@ -102,6 +115,7 @@ function Get-BucketIndex {
     if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     [pscustomobject]@{
         fetchedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        bucketSignature = $bucketSignature
         entries    = $entries
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $CachePath -Encoding UTF8
 

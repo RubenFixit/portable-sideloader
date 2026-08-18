@@ -133,6 +133,7 @@ It exists for three reasons, none of them cosmetic:
 With no arguments — how the Platform starts it — it runs `update`, then waits for a keypress so the
 summary is readable. With arguments it passes them straight through and doesn't pause, so
 `PortableSideloader.exe ls` behaves like the script. Exit codes propagate either way.
+`PortableSideloader.exe -V` and `--version` print the installed version without invoking PowerShell.
 
 ## Configuration
 

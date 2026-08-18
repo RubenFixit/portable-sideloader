@@ -36,6 +36,12 @@ internal static class Launcher
 
         WaitForParentExit();
 
+        if (IsVersionRequest(args))
+        {
+            PrintVersion(root);
+            return 0;
+        }
+
         TryQuietly(() => CleanupPreviousStub(root));
 
         bool stagedApplied = false;
@@ -137,6 +143,23 @@ internal static class Launcher
             if (string.Equals(arg, wanted, StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
+    }
+
+    private static bool IsVersionRequest(string[] args)
+    {
+        if (args.Length != 1) return false;
+        return string.Equals(args[0], "-V", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(args[0], "-v", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(args[0], "--version", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(args[0], "-Version", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void PrintVersion(string root)
+    {
+        string path = Path.Combine(root, "App", "VERSION");
+        string version = File.Exists(path) ? File.ReadAllText(path).Trim() :
+            Assembly.GetExecutingAssembly().GetName().Version.ToString();
+        Console.WriteLine("portable-sideloader " + version);
     }
 
     private static void Relaunch(string exePath, string[] args)
