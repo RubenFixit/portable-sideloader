@@ -320,7 +320,9 @@ Note the Platform spells these categories with "and", not "&" — `Music and Vid
 Tier 1 exists because several sideloaded apps ship executables with no version resource at all
 (OpenSCAD and OrcaSlicer among them), leaving nothing to compare against. It is deliberately *not*
 `appinfo.ini`: writing that would make the Platform treat a flat folder as a PAF app and expect a
-layout it doesn't have.
+layout it doesn't have. When an upstream URL is available, `update` asks before replacing an
+existing `NoBaseline` folder and creates the normal backup first. `install` offers the same
+overwrite path if that app is already managed but has no baseline.
 
 ## What `update` actually does
 

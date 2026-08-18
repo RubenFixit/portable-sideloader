@@ -37,6 +37,30 @@ function Get-DownloadFileName {
     return $name
 }
 
+function Write-TransferProgress {
+    param(
+        [Parameter(Mandatory)][string]$Activity,
+        [Parameter(Mandatory)][long]$Completed,
+        [Parameter(Mandatory)][long]$Total,
+        [Parameter(Mandatory)][Diagnostics.Stopwatch]$Timer,
+        [string]$Item = ''
+    )
+
+    $percent = if ($Total -gt 0) { [math]::Min(100, [math]::Floor(100 * $Completed / $Total)) } else { 0 }
+    $eta = '--:--'
+    if ($Completed -gt 0 -and $Timer.Elapsed.TotalSeconds -gt 0 -and $Total -gt $Completed) {
+        $seconds = $Timer.Elapsed.TotalSeconds * (($Total - $Completed) / [double]$Completed)
+        $eta = ([TimeSpan]::FromSeconds($seconds)).ToString('hh\:mm\:ss')
+    }
+    $status = if ($Item) { "$Item  |  ETA $eta" } else { "ETA $eta" }
+    Write-Progress -Activity $Activity -Status $status -PercentComplete $percent
+}
+
+function Complete-TransferProgress {
+    param([string]$Activity)
+    Write-Progress -Activity $Activity -Completed
+}
+
 function Invoke-PackageDownload {
     param(
         [Parameter(Mandatory)][string]$Url,
@@ -94,11 +118,57 @@ function Expand-Package {
     $ext = [IO.Path]::GetExtension($ArchivePath).ToLowerInvariant()
 
     if ($ext -eq '.zip') {
+        $zip = $null
         try {
-            Expand-Archive -LiteralPath $ArchivePath -DestinationPath $DestinationDir -Force
+            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+            $zip = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
+            $entries = @($zip.Entries)
+            $total = [long](($entries | Where-Object { -not $_.FullName.EndsWith('/') } |
+                Measure-Object -Property Length -Sum).Sum)
+            $done = [long]0
+            $timer = [Diagnostics.Stopwatch]::StartNew()
+            $lastProgress = [long]0
+            $root = ([IO.Path]::GetFullPath($DestinationDir)).TrimEnd('\') + '\'
+
+            foreach ($entry in $entries) {
+                $target = [IO.Path]::GetFullPath((Join-Path $DestinationDir $entry.FullName))
+                if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Archive entry escapes extraction directory: $($entry.FullName)"
+                }
+                if ($entry.FullName.EndsWith('/')) {
+                    New-Item -ItemType Directory -Path $target -Force | Out-Null
+                    continue
+                }
+
+                $parent = Split-Path -Parent $target
+                if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+                $input = $entry.Open()
+                $output = [IO.File]::Open($target, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try {
+                    $buffer = New-Object byte[] 1048576
+                    while (($read = $input.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                        $output.Write($buffer, 0, $read)
+                        $done += $read
+                        if ($timer.ElapsedMilliseconds - $lastProgress -ge 150) {
+                            Write-TransferProgress -Activity 'Extracting package' -Completed $done -Total $total `
+                                -Timer $timer -Item ([IO.Path]::GetFileName($entry.FullName))
+                            $lastProgress = $timer.ElapsedMilliseconds
+                        }
+                    }
+                } finally {
+                    $output.Dispose()
+                    $input.Dispose()
+                }
+            }
+            $timer.Stop()
+            Write-TransferProgress -Activity 'Extracting package' -Completed $total -Total $total -Timer $timer
+            Complete-TransferProgress -Activity 'Extracting package'
             return $DestinationDir
         } catch {
-            Write-Verbose "Expand-Archive failed ($($_.Exception.Message)); falling back to 7-Zip."
+            if ($zip) { $zip.Dispose() }
+            Write-Verbose "ZIP extraction failed ($($_.Exception.Message)); falling back to 7-Zip."
+        } finally {
+            if ($zip) { $zip.Dispose() }
         }
     }
 
@@ -106,7 +176,23 @@ function Expand-Package {
         throw "7-Zip is required to extract '$([IO.Path]::GetFileName($ArchivePath))' but was not found. Install 7-Zip, or add 7-ZipPortable to your PortableApps folder."
     }
 
-    $stdout = & $SevenZip x $ArchivePath "-o$DestinationDir" -y 2>&1
+    Write-Progress -Activity 'Extracting package' -Status 'starting extraction...' -PercentComplete 0
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $lastPercent = 0
+    $stdout = @(& $SevenZip x $ArchivePath "-o$DestinationDir" -y -bsp1 2>&1 | ForEach-Object {
+        $line = $_.ToString()
+        if ($line -match '(?<percent>\d{1,3})%') {
+            $lastPercent = [int]$Matches.percent
+            $eta = '--:--'
+            if ($lastPercent -gt 0 -and $lastPercent -lt 100 -and $timer.Elapsed.TotalSeconds -gt 0) {
+                $seconds = $timer.Elapsed.TotalSeconds * ((100 - $lastPercent) / [double]$lastPercent)
+                $eta = ([TimeSpan]::FromSeconds($seconds)).ToString('hh\:mm\:ss')
+            }
+            Write-Progress -Activity 'Extracting package' -Status "$lastPercent%  |  ETA $eta" -PercentComplete $lastPercent
+        } else { $_ }
+    })
+    $timer.Stop()
+    Complete-TransferProgress -Activity 'Extracting package'
     if ($LASTEXITCODE -ne 0) {
         # Not an archive - treat the download as the payload itself.
         $produced = @(Get-ChildItem -LiteralPath $DestinationDir -Force -ErrorAction SilentlyContinue)
@@ -167,14 +253,37 @@ function Copy-DirectoryContent {
     # Copies the *contents* of a directory. Deliberately enumerates rather than using a "\*"
     # glob: -LiteralPath does not expand wildcards, and -Path would misread names containing
     # [ or ] as character classes.
-    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Destination)
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination,
+        [string]$Activity = 'Copying files'
+    )
 
     if (-not (Test-Path -LiteralPath $Destination)) {
         New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     }
-    foreach ($item in @(Get-ChildItem -LiteralPath $Source -Force)) {
-        Copy-Item -LiteralPath $item.FullName -Destination $Destination -Recurse -Force
+    $directories = @(Get-ChildItem -LiteralPath $Source -Directory -Recurse -Force -ErrorAction SilentlyContinue)
+    foreach ($directory in $directories) {
+        $relative = $directory.FullName.Substring($Source.TrimEnd('\').Length).TrimStart('\')
+        New-Item -ItemType Directory -Path (Join-Path $Destination $relative) -Force | Out-Null
     }
+
+    $files = @(Get-ChildItem -LiteralPath $Source -File -Recurse -Force -ErrorAction SilentlyContinue)
+    $total = [long](($files | Measure-Object -Property Length -Sum).Sum)
+    $done = [long]0
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    foreach ($file in $files) {
+        $relative = $file.FullName.Substring($Source.TrimEnd('\').Length).TrimStart('\')
+        $destinationFile = Join-Path $Destination $relative
+        $parent = Split-Path -Parent $destinationFile
+        if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+        Copy-Item -LiteralPath $file.FullName -Destination $destinationFile -Force
+        $done += $file.Length
+        Write-TransferProgress -Activity $Activity -Completed $done -Total $total -Timer $timer `
+            -Item $relative
+    }
+    $timer.Stop()
+    Complete-TransferProgress -Activity $Activity
 }
 
 function Backup-App {
@@ -188,7 +297,7 @@ function Backup-App {
     $stamp  = (Get-Date).ToString('yyyyMMdd-HHmmss')
     $target = Join-Path (Join-Path $BackupRoot $Id) $stamp
     New-Item -ItemType Directory -Path $target -Force | Out-Null
-    Copy-DirectoryContent -Source $AppDir -Destination $target
+    Copy-DirectoryContent -Source $AppDir -Destination $target -Activity 'Backing up app'
     return $target
 }
 

@@ -567,9 +567,7 @@ function Invoke-InstallFromUrl {
         ($base -replace '[-_.]?\d+([._-]\d+)*.*$', '') -replace '[^A-Za-z0-9._-]', ''
     }
     if (-not $appId) { throw 'Could not derive a folder name from the URL; pass -Id.' }
-    if (Get-ManagedApp -Manifest $Manifest -Id $appId) {
-        throw "'$appId' is already managed. Use 'update $appId', or pass -Id for a different folder name."
-    }
+    $existing = Get-ManagedApp -Manifest $Manifest -Id $appId
 
     $built = New-AppEntryFromUrl -Url $Url -Id $appId -Config $script:Cfg -DisplayName $DisplayName `
                  -WatchUrl $WatchUrl -VersionPattern $VersionPattern -Preserve $Preserve
@@ -592,6 +590,35 @@ function Invoke-InstallFromUrl {
     }
     Write-Host "    into  $(Join-Path $Root $appId)"
     Write-Host ''
+
+    if ($existing) {
+        $existingDir = Get-AppFolder -Entry $existing -Root $Root
+        $baseline = if (Test-Path -LiteralPath $existingDir) {
+            Get-InstalledVersion -AppDir $existingDir -Name (Get-Prop $existing 'name' $appId) -Exe (Get-Prop $existing 'exe')
+        }
+        if ($baseline) {
+            throw "'$appId' is already managed. Use '$script:CommandName update $appId', or pass -Id to install under a different folder name."
+        }
+
+        Write-Host '    no installed baseline could be detected' -ForegroundColor Yellow
+        Write-Host '    a backup will be created before replacement' -ForegroundColor DarkGray
+        Write-Host ''
+        if ($DryRun) { Write-Host '    -DryRun: nothing written.' -ForegroundColor DarkGray; Write-Host ''; return }
+        if (-not (Confirm-Action "Replace the existing folder with $($up.Version)?")) { return }
+
+        try {
+            $result = Invoke-AppInstall -Entry $existing -Upstream $up -Root $Root -IsUpdate
+            Save-AppManifest -Manifest $Manifest -Path $ManifestPath
+            Write-Host "    overwritten $appId with $($result.Version)" -ForegroundColor Green
+            if ($result.Backup) { Write-Host "    backup: $($result.Backup)" -ForegroundColor DarkGray }
+            try { Add-AppExecutableToPath -Entry $existing -Root $Root -Prompt }
+            catch { Write-Warning "Could not add $appId to PATH: $($_.Exception.Message)" }
+        } catch {
+            Write-Host "    FAILED: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        Write-Host ''
+        return
+    }
 
     if ($DryRun) { Write-Host '    -DryRun: nothing written.' -ForegroundColor DarkGray; Write-Host ''; return }
     if (-not (Confirm-Action 'Proceed?' -DefaultYes)) { return }
@@ -634,8 +661,34 @@ function Invoke-Install {
     }
 
     $appId = if ($Id) { $Id } else { $chosen.Name }
-    if (Get-ManagedApp -Manifest $Manifest -Id $appId) {
-        throw "'$appId' is already managed. Use 'update $appId', or pass -Id to install under a different folder name."
+    $existing = Get-ManagedApp -Manifest $Manifest -Id $appId
+    if ($existing) {
+        $existingRow = Get-AppRow -Entry $existing -Root $Root -Online
+        if ($existingRow.Status -ne 'NoBaseline') {
+            throw "'$appId' is already managed. Use '$script:CommandName update $appId', or pass -Id to install under a different folder name."
+        }
+        if (-not $existingRow.Upstream -or -not $existingRow.Upstream.Url) {
+            throw "'$appId' has no usable upstream download URL for a baseline overwrite."
+        }
+
+        Write-Head "overwrite $appId $($existingRow.Latest)"
+        Write-Host '    no installed baseline could be detected' -ForegroundColor Yellow
+        Write-Host "    existing folder: $(Join-Path $Root $appId)"
+        Write-Host '    a backup will be created before replacement' -ForegroundColor DarkGray
+        Write-Host ''
+        if ($DryRun) { Write-Host '    -DryRun: nothing written.' -ForegroundColor DarkGray; Write-Host ''; return }
+        if (-not (Confirm-Action "Replace the existing folder with $($existingRow.Latest)?")) { return }
+
+        try {
+            $result = Invoke-AppInstall -Entry $existing -Upstream $existingRow.Upstream -Root $Root -IsUpdate
+            Save-AppManifest -Manifest $Manifest -Path $ManifestPath
+            Write-Host "    overwritten $appId with $($result.Version)" -ForegroundColor Green
+            if ($result.Backup) { Write-Host "    backup: $($result.Backup)" -ForegroundColor DarkGray }
+        } catch {
+            Write-Host "    FAILED: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        Write-Host ''
+        return
     }
 
     $entry = [pscustomobject]@{
@@ -744,8 +797,14 @@ function Invoke-Update {
     Write-Host ''
 
     $withUpdates = @($rows | Where-Object { $_.Status -eq 'UpdateAvailable' -and $_.Upstream.Url })
+    $baselineOverwrites = @($rows | Where-Object { $_.Status -eq 'NoBaseline' -and $_.Upstream.Url })
     $heldBack    = @($withUpdates | Where-Object { $_.Held })
-    $actionable  = if ($Force) { $withUpdates } else { @($withUpdates | Where-Object { -not $_.Held }) }
+    if ($Force) {
+        $actionable = @($withUpdates)
+    } else {
+        $actionable = @($withUpdates | Where-Object { -not $_.Held })
+    }
+    $actionable = @($actionable) + @($baselineOverwrites)
 
     if ($heldBack.Count -gt 0 -and -not $Force) {
         Write-Host ''
@@ -767,8 +826,14 @@ function Invoke-Update {
 
     Write-Host ''
     foreach ($r in $actionable) {
+        $isBaselineOverwrite = $r.Status -eq 'NoBaseline'
         Write-Host "  $($r.App)  $($r.Installed) -> $($r.Latest)" -ForegroundColor Yellow
-        if (-not (Confirm-Action "Update $($r.App)?" -DefaultYes)) {
+        $prompt = if ($isBaselineOverwrite) {
+            "No baseline for $($r.App). Replace its existing folder with $($r.Latest)?"
+        } else {
+            "Update $($r.App)?"
+        }
+        if (-not (Confirm-Action $prompt -DefaultYes:$(-not $isBaselineOverwrite))) {
             Write-Host '    skipped' -ForegroundColor DarkGray
             continue
         }
@@ -1113,19 +1178,24 @@ $rootHint = Get-Prop $manifest 'portableAppsRoot'
 if (-not $rootHint) { $rootHint = Get-Setting $script:Cfg 'portableAppsRoot' }
 $root = Resolve-PortableAppsRoot -Explicit $PortableAppsRoot -FromManifest $rootHint
 
-switch ($Command) {
-    { $_ -in 'ls', 'list' } { Invoke-Ls      -Manifest $manifest -Root $root }
-    'search'                { Invoke-Search }
-    'show'                  { Invoke-Show    -Manifest $manifest -Root $root }
-    'explain'               { Invoke-Explain }
-    'add'                   { Invoke-Add     -Manifest $manifest -Root $root }
-    'install'               { Invoke-Install -Manifest $manifest -Root $root }
-    'path'                  { Invoke-Path    -Manifest $manifest -Root $root }
-    'update'                { Invoke-Update  -Manifest $manifest -Root $root }
-    'self-update'           { exit (Invoke-SelfUpdate -Manifest $manifest -Root $root) }
-    'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }
-    'categorize'            { Invoke-Categorize -Manifest $manifest -Root $root }
-    'hold'                  { Invoke-Hold    -Manifest $manifest -Root $root }
-    'unhold'                { Invoke-Hold    -Manifest $manifest -Root $root -Off }
-    'restore'               { Invoke-Restore -Manifest $manifest -Root $root }
+try {
+    switch ($Command) {
+        { $_ -in 'ls', 'list' } { Invoke-Ls      -Manifest $manifest -Root $root }
+        'search'                { Invoke-Search }
+        'show'                  { Invoke-Show    -Manifest $manifest -Root $root }
+        'explain'               { Invoke-Explain }
+        'add'                   { Invoke-Add     -Manifest $manifest -Root $root }
+        'install'               { Invoke-Install -Manifest $manifest -Root $root }
+        'path'                  { Invoke-Path    -Manifest $manifest -Root $root }
+        'update'                { Invoke-Update  -Manifest $manifest -Root $root }
+        'self-update'           { exit (Invoke-SelfUpdate -Manifest $manifest -Root $root) }
+        'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }
+        'categorize'            { Invoke-Categorize -Manifest $manifest -Root $root }
+        'hold'                  { Invoke-Hold    -Manifest $manifest -Root $root }
+        'unhold'                { Invoke-Hold    -Manifest $manifest -Root $root -Off }
+        'restore'               { Invoke-Restore -Manifest $manifest -Root $root }
+    }
+} catch {
+    Write-Host "sideload.ps1: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
 }
