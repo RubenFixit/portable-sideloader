@@ -24,6 +24,13 @@
   "checkver": {
     "github": "https://github.com/rmcrackan/Libation"
   },
+  "x-portable-sideloader": {
+    "provider": "github",
+    "source": {
+      "repo": "rmcrackan/Libation",
+      "assetPattern": "^Libation\\.\\d+\\.\\d+\\.\\d+-windows-chardonnay-x64\\.zip$"
+    }
+  },
   "autoupdate": {
     "url": "https://github.com/rmcrackan/Libation/releases/download/v$version/Libation.$version-windows-chardonnay-x64.zip"
   }

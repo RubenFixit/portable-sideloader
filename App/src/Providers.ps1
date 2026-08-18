@@ -107,10 +107,13 @@ function Get-LatestFromGitHub {
         if (-not $asset) { Write-Verbose "No asset matched /$pattern/ in $repo $(Get-Prop $rel 'tag_name')" }
     }
 
+    $hash = if ($asset) { Get-Prop $asset 'digest' } else { $null }
+    if ($hash -and $hash -match '^sha256:') { $hash = $hash.Substring(7) }
+
     return [pscustomobject]@{
         Version = ((Get-Prop $rel 'tag_name' '') -replace '^[vV]', '')
         Url     = if ($asset) { $asset.browser_download_url } else { $null }
-        Hash    = $null
+        Hash    = $hash
         Persist = @()
         Origin  = "github:$repo"
     }

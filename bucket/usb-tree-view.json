@@ -1,5 +1,5 @@
 {
-  "version": "4.7.2",
+  "version": "4.7.3",
   "description": "USB device tree viewer for Windows",
   "homepage": "https://www.uwe-sieber.de/usbtreeview_e.html",
   "license": "Freeware",
@@ -14,6 +14,14 @@
   ],
   "checkver": {
     "url": "https://www.uwe-sieber.de/usbtreeview_e.html",
-    "regex": "UsbTreeView V(?<version>[0-9.]+)"
+    "regex": "USB Device Tree Viewer V(?<version>[0-9.]+)"
+  },
+  "x-portable-sideloader": {
+    "provider": "url",
+    "source": {
+      "watchUrl": "https://www.uwe-sieber.de/usbtreeview_e.html",
+      "versionPattern": "USB Device Tree Viewer V(?<version>[0-9.]+)",
+      "urlTemplate": "https://www.uwe-sieber.de/files/UsbTreeView_x64.zip"
+    }
   }
 }
