@@ -12,6 +12,7 @@
       path <app>              Add or remove app directories from user PATH.
       update [app]            Check for updates and apply them, prompting per app.
       self-update             Check and stage portable-sideloader itself (launcher preflight).
+      bump <app> [version]    Record a version in .sideload.json without installing anything.
       remove <app>            Uninstall an app and stop managing it.
 
 .EXAMPLE
@@ -33,7 +34,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet('ls', 'list', 'search', 'show', 'explain', 'add', 'install', 'path', 'update', 'self-update', 'remove',
-                 'categorize', 'hold', 'unhold', 'restore', 'help')]
+                 'categorize', 'hold', 'unhold', 'bump', 'restore', 'help')]
     [string]   $Command = 'help',
 
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
@@ -74,6 +75,7 @@ param(
     [switch]   $Refresh,
     [switch]   $AddToPath,
     [switch]   $Remove,
+    [switch]   $SelfManaged,
     [string[]] $Path
 )
 
@@ -190,6 +192,18 @@ function Get-HoldInfo {
     return [pscustomobject]@{ Held = $true; Reason = $reason }
 }
 
+function Test-SelfManaged {
+    <#
+        "selfManaged": true marks an app that updates itself (a built-in auto-updater, a
+        launcher that self-patches, etc). Like a held app it is still checked and reported so
+        you know when a newer release lands, but `update` never offers to replace its files -
+        doing so could fight the app's own updater or overwrite state it manages. Use
+        `bump <app>` to tell sideload.ps1 the app has already moved to a newer version.
+    #>
+    param($Entry)
+    return [bool](Get-Prop $Entry 'selfManaged' $false)
+}
+
 function Get-AppFolder {
     # A self entry owns the package this script is running from, wherever that happens to be -
     # a dev checkout outside the PortableApps tree still resolves correctly.
@@ -231,6 +245,7 @@ function Get-AppRow {
             Upstream = $selfUp
             Notes = Get-Prop $Entry 'notes' ''
             Held = $selfHold.Held; HoldReason = $selfHold.Reason
+            SelfManaged = Test-SelfManaged $Entry
         }
     }
 
@@ -266,6 +281,7 @@ function Get-AppRow {
         Upstream = $up
         Notes = Get-Prop $Entry 'notes' ''
         Held = $hold.Held; HoldReason = $hold.Reason
+        SelfManaged = Test-SelfManaged $Entry
     }
 }
 
@@ -283,6 +299,7 @@ function Write-Row {
         Write-Host '  HELD' -NoNewline -ForegroundColor Cyan
         if ($Row.HoldReason) { Write-Host " ($($Row.HoldReason))" -NoNewline -ForegroundColor DarkCyan }
     }
+    if ($Row.SelfManaged) { Write-Host '  SELF-MANAGED' -NoNewline -ForegroundColor Blue }
     if ($Row.Detail) { Write-Host "  ($($Row.Detail))" -NoNewline -ForegroundColor DarkGray }
     Write-Host ''
 }
@@ -546,6 +563,7 @@ function Invoke-Add {
     $built = New-AppEntryFromUrl -Url $url -Id $appId -Config $script:Cfg -DisplayName $DisplayName `
                  -WatchUrl $WatchUrl -VersionPattern $VersionPattern -Preserve $Preserve
     if ($Category) { $built.Entry | Add-Member -NotePropertyName 'category' -NotePropertyValue $Category -Force }
+    if ($SelfManaged) { $built.Entry | Add-Member -NotePropertyName 'selfManaged' -NotePropertyValue $true -Force }
 
     Write-Head "add $appId"
     Show-Inference -Inferred $built.Inferred -Url $url
@@ -575,6 +593,7 @@ function Invoke-InstallFromUrl {
     $built = New-AppEntryFromUrl -Url $Url -Id $appId -Config $script:Cfg -DisplayName $DisplayName `
                  -WatchUrl $WatchUrl -VersionPattern $VersionPattern -Preserve $Preserve
     if ($Category) { $built.Entry | Add-Member -NotePropertyName 'category' -NotePropertyValue $Category -Force }
+    if ($SelfManaged) { $built.Entry | Add-Member -NotePropertyName 'selfManaged' -NotePropertyValue $true -Force }
 
     Write-Head "install $appId (from url)"
     Show-Inference -Inferred $built.Inferred -Url $Url
@@ -701,6 +720,7 @@ function Invoke-Install {
         source   = [pscustomobject]@{ bucket = $chosen.Bucket; manifest = $chosen.Name }
     }
     if ($Category) { $entry | Add-Member -NotePropertyName 'category' -NotePropertyValue $Category }
+    if ($SelfManaged) { $entry | Add-Member -NotePropertyName 'selfManaged' -NotePropertyValue $true }
 
     $up = Resolve-Upstream -Entry $entry
     if (-not $up.Version) { throw "Could not resolve a version for '$($chosen.Name)': $($up.Error)" }
@@ -838,13 +858,14 @@ function Invoke-Update {
 
     $withUpdates = @($rows | Where-Object { $_.Status -eq 'UpdateAvailable' -and $_.Upstream.Url })
     $baselineOverwrites = @($rows | Where-Object {
-        $_.Status -eq 'NoBaseline' -and $_.Upstream.Url -and ($Force -or -not $_.Held)
+        $_.Status -eq 'NoBaseline' -and $_.Upstream.Url -and ($Force -or (-not $_.Held -and -not $_.SelfManaged))
     })
-    $heldBack    = @($withUpdates | Where-Object { $_.Held })
+    $heldBack        = @($withUpdates | Where-Object { $_.Held })
+    $selfManagedBack = @($withUpdates | Where-Object { $_.SelfManaged -and -not $_.Held })
     if ($Force) {
         $actionable = @($withUpdates)
     } else {
-        $actionable = @($withUpdates | Where-Object { -not $_.Held })
+        $actionable = @($withUpdates | Where-Object { -not $_.Held -and -not $_.SelfManaged })
     }
     $actionable = @($actionable) + @($baselineOverwrites)
     $actionable = @($actionable) + @($missingReinstalls)
@@ -853,6 +874,11 @@ function Invoke-Update {
         Write-Host ''
         Write-Host "  $($heldBack.Count) held app(s) have updates and will be skipped: $(($heldBack | ForEach-Object { $_.App }) -join ', ')" -ForegroundColor Cyan
         Write-Host "  Use -Force to update them anyway, or 'unhold <app>' to stop holding." -ForegroundColor DarkGray
+    }
+    if ($selfManagedBack.Count -gt 0 -and -not $Force) {
+        Write-Host ''
+        Write-Host "  $($selfManagedBack.Count) self-managed app(s) have updates and will not be prompted: $(($selfManagedBack | ForEach-Object { $_.App }) -join ', ')" -ForegroundColor Cyan
+        Write-Host "  These update themselves - once one has, run '$script:CommandName bump <app>' to record its new version, or -Force to let sideload.ps1 install it instead." -ForegroundColor DarkGray
     }
     if ($DryRun) {
         Write-Host ''
@@ -902,6 +928,57 @@ function Invoke-Update {
             Write-Host "    FAILED: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
+    Write-Host ''
+}
+
+function Invoke-Bump {
+    <#
+        Records a version in .sideload.json without downloading or touching a single program
+        file. For an app that updates itself (mark it "selfManaged": true so `update` leaves it
+        alone), this is how you tell sideload.ps1 the installed version has moved on - otherwise
+        it keeps reporting the old baseline forever. With no version argument, it resolves the
+        current upstream version and bumps to that.
+    #>
+    param($Manifest, [string]$Root)
+    if (-not $Name) { throw "bump needs an app id, e.g. $script:CommandName bump OrcaSlicer 1.2.3" }
+
+    $id = $Name[0]
+    $entry = Get-ManagedApp -Manifest $Manifest -Id $id
+    if (-not $entry) { throw "'$id' is not managed. Try: $script:CommandName ls" }
+    if (Test-SelfEntry $entry) {
+        throw "Cannot bump '$id' - portable-sideloader's own version comes from App\VERSION, not .sideload.json."
+    }
+
+    $appDir = Get-AppFolder -Entry $entry -Root $Root
+    if (-not (Test-Path -LiteralPath $appDir)) { throw "'$id' folder not found: $appDir" }
+
+    $version = if ($Name.Count -gt 1) { $Name[1] } else { $null }
+    if (-not $version) {
+        Write-Host '    no version given, checking upstream for the latest...' -ForegroundColor DarkGray
+        $up = Resolve-Upstream -Entry $entry
+        if (-not $up.Version) {
+            throw "Could not resolve an upstream version to bump to: $($up.Error). Pass one explicitly: $script:CommandName bump $id <version>"
+        }
+        $version = $up.Version
+    }
+
+    $marker   = Get-SideloadMarker -AppDir $appDir
+    $previous = if ($marker) { Get-Prop $marker 'version' } else { $null }
+
+    Write-Head "bump $id"
+    Write-Host "    $(if ($previous) { $previous } else { '(unknown)' })  ->  $version"
+    Write-Host '    this only updates the local version record - no files are downloaded or changed' -ForegroundColor DarkGray
+    Write-Host ''
+
+    if ($DryRun) { Write-Host '    -DryRun: nothing written.' -ForegroundColor DarkGray; Write-Host ''; return }
+    if (-not (Confirm-Action "Record $id as $version without installing anything?" -DefaultYes)) { return }
+
+    $prevUrl = if ($marker) { Get-Prop $marker 'url' } else { $null }
+    $prevSha = if ($marker) { Get-Prop $marker 'sha256' } else { $null }
+    Set-SideloadMarker -AppDir $appDir -Id $id -Version $version `
+        -Provider (Get-Prop $entry 'provider') -Url $prevUrl -Sha256 $prevSha
+
+    Write-Host "    recorded $id as $version in $(Join-Path $appDir '.sideload.json')" -ForegroundColor Green
     Write-Host ''
 }
 
@@ -1208,6 +1285,7 @@ function Invoke-Help {
         @('categorize [-Import]',  'Sync apps.json categories with the Platform menu'),
         @('hold <app> -Reason x',  'Report updates for an app but never apply them'),
         @('unhold <app>',          'Stop holding an app'),
+        @('bump <app> [version]',  'Record a version without installing anything (self-updating apps)'),
         @('restore <app> [stamp]', 'Roll back to a backup (-List to see them)')
     ) | ForEach-Object {
         Write-Host ("    {0}  " -f $_[0].PadRight(22)) -NoNewline -ForegroundColor White
@@ -1215,7 +1293,7 @@ function Invoke-Help {
     }
     Write-Host ''
     Write-Host '    Options: -DryRun -Yes -AddToPath -Remove -Path <dir> -KeepData -NoBackup -Refresh -Bucket <b> -Id <folder>' -ForegroundColor DarkGray
-    Write-Host '             -WatchUrl <page> -VersionPattern <regex> -Preserve a,b -DisplayName <s>' -ForegroundColor DarkGray
+    Write-Host '             -WatchUrl <page> -VersionPattern <regex> -Preserve a,b -DisplayName <s> -SelfManaged' -ForegroundColor DarkGray
     Write-Host '             -PortableAppsRoot <path> -DataDir <path> -TimeoutSec <n> -StaleDays <n>' -ForegroundColor DarkGray
     Write-Host ''
     Write-Host '    Defaults live in App\config.json; your overrides in Data\config.local.json.' -ForegroundColor DarkGray
@@ -1243,6 +1321,7 @@ try {
         'path'                  { Invoke-Path    -Manifest $manifest -Root $root }
         'update'                { Invoke-Update  -Manifest $manifest -Root $root }
         'self-update'           { exit (Invoke-SelfUpdate -Manifest $manifest -Root $root) }
+        'bump'                  { Invoke-Bump    -Manifest $manifest -Root $root }
         'remove'                { Invoke-Remove  -Manifest $manifest -Root $root }
         'categorize'            { Invoke-Categorize -Manifest $manifest -Root $root }
         'hold'                  { Invoke-Hold    -Manifest $manifest -Root $root }

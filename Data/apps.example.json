@@ -43,7 +43,8 @@
       "preserve": ["Data", "profiles"],
       "category": "Utilities",
       "hold": "why this app is never updated automatically",
-      "notes": "exe pins which executable is used for version detection and the Platform menu key. preserve lists folders to carry across an update, overriding the Scoop manifest's persist. hold may be true or a reason string: the app is still checked and reported, but never updated without -Force - use it when upstream tracks a different edition than the one you run."
+      "selfManaged": false,
+      "notes": "exe pins which executable is used for version detection and the Platform menu key. preserve lists folders to carry across an update, overriding the Scoop manifest's persist. hold may be true or a reason string: the app is still checked and reported, but never updated without -Force - use it when upstream tracks a different edition than the one you run. selfManaged is for apps with their own updater: 'update' still reports new releases but never offers to install them (also without -Force); after the app updates itself, run 'bump <id> [version]' to record its new version in .sideload.json without downloading anything."
     }
   ]
 }

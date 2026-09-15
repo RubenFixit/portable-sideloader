@@ -39,7 +39,7 @@ and that its parent contains `Start.exe`. If the collection uses a different lay
 
 ## Usage
 
-One entry point, twelve commands.
+One entry point, thirteen commands.
 
 ```powershell
 cd App
@@ -58,11 +58,12 @@ cd App
 .\sideload.ps1 categorize -Import    # pull Platform categories into apps.json
 .\sideload.ps1 categorize            # push apps.json categories to the Platform
 .\sideload.ps1 hold MobaXterm -Reason "licensed edition"
+.\sideload.ps1 bump OrcaSlicer 2.4.2  # record a version without installing anything
 .\sideload.ps1 restore OrcaSlicer -List
 ```
 
 Useful flags: `-DryRun`, `-Yes`, `-AddToPath`, `-Remove`, `-KeepData`, `-NoBackup`, `-Refresh`, `-Bucket`, `-Id`,
-`-DisplayName`, `-WatchUrl`, `-VersionPattern`, `-Preserve`, `-Category`, `-PortableAppsRoot`,
+`-DisplayName`, `-WatchUrl`, `-VersionPattern`, `-Preserve`, `-Category`, `-SelfManaged`, `-PortableAppsRoot`,
 `-DataDir`, `-ConfigPath`, `-LocalConfigPath`.
 
 `update -DryRun` is the safe way to see where everything stands. `path <app>` adds the detected
@@ -240,7 +241,7 @@ the SHA-256 before writing it.
 `Data\apps.json` is the per-app registry — yours, untracked. On a fresh install, the built-in
 self entry from `App\config.json` is used until the registry is first written. See
 `Data\apps.example.json` for the shape and the optional `exe` / `preserve` /
-`category` / `hold` fields.
+`category` / `hold` / `selfManaged` fields.
 
 ## Requirements
 
@@ -289,6 +290,40 @@ MobaXterm_Pro_Portable  23.2*  ->  26.4  UpdateAvailable  HELD (licensed Pro edi
 
 `hold` with no `-Reason` sets `"hold": true`; with one it stores the string and prints it every
 time, so the reason survives longer than your memory of it.
+
+## Apps that update themselves
+
+Some apps carry their own updater (a self-patching launcher, a built-in "check for updates"),
+so sideload.ps1 should never try to replace their files - that would fight the app's own update
+mechanism, or clobber state it manages. Mark those entries `"selfManaged": true`, either by hand
+in `apps.json` or with `-SelfManaged` on `add` / `install`:
+
+```powershell
+.\sideload.ps1 install SomeSelfUpdatingApp -SelfManaged
+```
+
+`update` still checks and reports a self-managed app - you still want to know a release exists -
+but never prompts to install it, the same way a held app is skipped:
+
+```
+SomeSelfUpdatingApp  1.2.0  ->  1.4.0  UpdateAvailable  SELF-MANAGED
+
+  1 self-managed app(s) have updates and will not be prompted: SomeSelfUpdatingApp
+  These update themselves - once one has, run 'bump <app>' to record its new version, or -Force
+  to let sideload.ps1 install it instead.
+```
+
+Once the app has updated itself, tell sideload.ps1 what version it's now on so `ls` and `update`
+stop reporting a stale baseline. `bump` only rewrites `.sideload.json` - nothing is downloaded or
+installed:
+
+```powershell
+.\sideload.ps1 bump SomeSelfUpdatingApp 1.4.0   # record an explicit version
+.\sideload.ps1 bump SomeSelfUpdatingApp         # or resolve and record the current upstream version
+```
+
+`-Force` on `update` overrides `selfManaged` the same way it overrides `hold`, for the rare case
+where you'd rather let sideload.ps1 install a release directly.
 
 ## Rolling back
 
@@ -408,6 +443,7 @@ out so you go check the rule rather than assuming all is well. Needs a few runs 
 - [x] Self-update — the tool is registered in its own registry and stages its own releases
 - [x] `hold` for apps upstream tracks a different edition of
 - [x] `restore` for rolling back from backups
+- [x] `selfManaged` + `bump` for apps that update themselves
 - [ ] Custom rules for the remaining `todo` apps (MiniTool Partition Wizard, PortableRegistrator)
 - [ ] Per-app version normalisers, for sources like Sublime that report `4-4200` vs `4200`
 - [ ] `[AppsRenamed]` / `[AppsHidden]` sync, same mechanism as categories
