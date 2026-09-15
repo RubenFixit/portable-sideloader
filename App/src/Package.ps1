@@ -117,6 +117,14 @@ function Expand-Package {
 
     $ext = [IO.Path]::GetExtension($ArchivePath).ToLowerInvariant()
 
+    # 7-Zip can open many Windows executables as PE containers and report a successful
+    # extraction. A portable .exe is already the payload, so extracting it would install its
+    # embedded resources instead of the program itself.
+    if ($ext -eq '.exe') {
+        Copy-Item -LiteralPath $ArchivePath -Destination $DestinationDir -Force
+        return $DestinationDir
+    }
+
     if ($ext -eq '.zip') {
         $zip = $null
         try {

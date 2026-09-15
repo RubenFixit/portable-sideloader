@@ -344,7 +344,8 @@ function Invoke-AppInstall {
                     -ExpectedSha256 $Upstream.Hash -TimeoutSec $dlTimeoutSec
 
     $stagingDir = Join-Path $CacheDir "staging\$id"
-    Write-Host '    extracting...' -ForegroundColor DarkGray
+    $packageAction = if ([IO.Path]::GetExtension($archive) -eq '.exe') { 'staging' } else { 'extracting' }
+    Write-Host "    $packageAction..." -ForegroundColor DarkGray
     $extracted = Expand-Package -ArchivePath $archive -DestinationDir $stagingDir -SevenZip $sevenZip
     $payload   = Resolve-PayloadRoot -Dir $extracted
 
