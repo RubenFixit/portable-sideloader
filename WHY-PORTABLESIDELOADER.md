@@ -1,234 +1,181 @@
-# Why I Chose PortableApps and PortableSideloader Instead of Scoop
+# When to Use PortableApps with PortableSideloader Instead of Scoop
 
-## Executive summary
+[PortableApps](https://portableapps.com/) and [Scoop](https://github.com/ScoopInstaller/Scoop) both make Windows software easier to manage without relying on traditional system-wide installers, but they optimize for different outcomes.
 
-When I started looking at Scoop, I realized that it solves a different problem than the one I was actually having. Scoop is probably the cleaner way to install and maintain software for a Windows user. But I already had a PortableApps collection, I was already manually adding apps that were not in the official catalog, and I wanted that collection to remain movable and usable on another computer.
+Scoop is a command-line installer for Windows. It installs and maintains applications in a user's Windows context, integrates them with the shell, resolves dependencies, and supports repeatable setup through manifests and buckets.
 
-- Scoop makes Windows software easy to install, update, remove, and add to the shell for the current user.
-- PortableApps makes an application collection, its launchers, and, when the application is packaged correctly, its data easy to move between Windows systems.
-- PortableSideloader fills the gap when PortableApps has the deployment model I want, but the application is not in the official catalog.
+PortableApps treats the application collection as the portable unit. Applications, launchers, and compatible user data can remain together on a local drive, removable drive, or synchronized directory. [PortableSideloader](README.md) extends that model to portable applications that are not maintained by the [official PortableApps catalog](https://portableapps.com/apps).
 
-The missing piece was not another installer. It was an updater for the apps I had already chosen to keep portable. The PortableApps Platform provides the collection and portability model I wanted, but its official updater does not maintain arbitrary apps added outside the catalog. PortableSideloader adds manifest-driven updates to that existing collection without requiring every app to become a full PAF package first.
+The choice is mostly about what needs to survive a move:
 
-Scoop is still useful. Choosing PortableApps does not prevent me from using Scoop on the same systems for user-context command-line installs.
+- Use Scoop when the goal is to install and maintain software for the current Windows user.
+- Use PortableApps with PortableSideloader when the application collection and its accumulated data need to move or synchronize together.
+- Use both when some applications should travel while others only need clean integration with each system.
 
-## What I was actually trying to solve
+## The two operating models
 
-The question I was trying to answer was not whether Scoop is a good package manager. It is. The question was whether I should replace my existing PortableApps collection with Scoop, or add the missing update capability to the collection I was already using.
+### PortableApps with PortableSideloader
 
-What I wanted was more specific than simply avoiding an installer or installing without elevation:
+The [PortableApps.com Platform](https://portableapps.com/) provides a menu, a common directory layout, portable launchers, backup support, and conventions for keeping application data with the application. It is designed for local, portable/USB, and cloud-drive use.
 
-> Keep a useful set of applications and their settings together, usable on another supported Windows system with minimal reconfiguration, while avoiding administrative installation requirements where possible—and continue receiving updates for applications that the PortableApps Platform does not track.
+Applications packaged in the [PortableApps.com Format](https://portableapps.com/development/portableapps.com_format) separate program files from user data. The standard layout places settings and profiles in a `Data\` directory so they can remain intact when the application is updated or moved. The format also defines metadata, icons, launchers, installer behavior, and rules for handling changes made to the host computer.
 
-That is the reason PortableSideloader made more sense for me than replacing the collection with Scoop.
+PortableSideloader extends this collection model to applications distributed as portable archives, standalone executables, GitHub releases, or other vendor downloads. It records update sources in `Data\apps.json`, compares installed and upstream versions, verifies downloads when hashes are available, preserves configured data paths, and replaces application payloads in the PortableApps directory.
 
-## What each system optimizes for
-
-### PortableApps and PortableSideloader
-
-PortableApps gives me a menu, a common directory layout, portable launchers, and a convention for keeping application data with the application. The platform is intended for local, USB, and cloud-drive use, including a synced application collection. PortableApps-format packages place personal data in a predictable `Data\` directory, which makes backup and movement easier.
-
-PortableSideloader extends that model to applications that are available as portable archives or vendor downloads but are not in the official catalog. It keeps the application under the PortableApps root, records the source and update rules in `Data\apps.json`, preserves selected data paths, and updates the application in place.
-
-The important part for me is that the collection is the thing that moves. I am not just installing the same applications again on another computer. I am moving the applications, their launchers, and, where supported, their working data together.
-
-## Ways to maintain an app that is missing from PortableApps
-
-PortableSideloader's `apps.json` does not have to be the permanent home for every missing application. There are four reasonable options, and they go from a small personal change to a full upstream packaging project:
-
-| Option | Effort | What it means | Best fit |
-|---|---|---|---|
-| Maintain a private manifest in the installed PortableSideloader | Lowest | Add the app to my local `Data\apps.json` and maintain it only for my own collection | A personal app, licensed edition, experimental rule, or anything I need working immediately |
-| Contribute a Scoop-compatible manifest to the PortableSideloader bucket | Low | Add the app to this repository's private bucket so it can be searched for and installed by other PortableSideloader users | An app that is useful to this collection and can be described with the sideloader manifest format |
-| Contribute a manifest to the official Scoop buckets | Medium | Follow Scoop's manifest conventions, submit the change upstream, and maintain it for the broader Scoop community | An app that fits Scoop's user-context installation model and has a generally useful distribution source |
-| Contribute a PortableApps PAF package | Highest | Build the launcher, metadata, installer, default data, and package required for official PortableApps distribution | An app that is genuinely portable, legally distributable, broadly useful, and worth maintaining as a full PAF package |
-
-The first option is the fastest because there is no contribution process at all. I can add an entry to the installed copy of `apps.json`, test it against my own directory layout, and change it whenever I need to. The downside is that the manifest is tied to my collection.
-
-The second option is the natural next step for this project. A Scoop-compatible manifest in the PortableSideloader bucket can be searched for and installed through PortableSideloader, while still supporting the custom providers, preservation rules, and PortableApps-oriented behavior that this repository needs. It is still much lighter than creating a PAF package, but the manifest becomes shared maintenance instead of a private workaround.
-
-The third option makes sense when the application is useful beyond PortableApps. The official Scoop buckets provide broader reach and established conventions for version checks, autoupdates, hashes, dependencies, persistence, and version cleanup. The tradeoff is that the manifest has to fit Scoop's expectations, and Scoop's package-management model may not cover the PortableApps-specific details I care about.
-
-Contributing an app to PortableApps.com has the greatest potential reach inside the PortableApps ecosystem, but it is also the most work. PortableApps.com provides the format specification, launcher, installer, development resources, and a development forum for creating and testing packages. Official inclusion gives the application a standard package identity, menu integration, update metadata, and a way for other users to discover it.
-
-A proper PAF package is considerably more work than a sideloader entry. It needs launcher configuration for application-specific paths and host changes, `AppInfo` metadata and icons, installer configuration, default data, portability testing, release packaging, and continued compatibility work as the application changes. A sideloader entry can often describe the upstream version, download, hash, executable, and preserved paths in a few manifest fields. For a personal side project, that difference matters. A PAF package is a real packaging project, not just a JSON file.
-
-For me, the practical progression is to start with a private manifest, move useful entries into the PortableSideloader bucket, contribute generally useful applications to Scoop when they fit that model, and only create a PAF package when the application and the extra maintenance are worth the broader PortableApps integration. These paths can also be sequential. A local entry can help me learn the app's data and launcher requirements before I decide whether it is ready for one of the upstream projects.
+PortableSideloader does not make an application portable by itself. It can preserve known files and directories, but an application may still write to the registry, user profile, credential store, services, drivers, or other system locations. A full PortableApps launcher can handle more application-specific cleanup and path adjustment than a general sideloader.
 
 ### Scoop
 
-Scoop is a command-line Windows installer and package manager. It generally installs per-user without administrator access, extracts applications into a Scoop root, creates shims, manages versions, and updates applications from manifests. Its default per-user layout is under `%USERPROFILE%\scoop`, with apps, buckets, cache, persisted data, and shims stored in separate subdirectories.
+[Scoop describes itself](https://github.com/ScoopInstaller/Scoop) as a command-line installer for Windows. By default, it installs applications for the current user under `%USERPROFILE%\scoop`, avoids many UAC prompts and installer side effects, resolves dependencies, and exposes commands through shims instead of adding every application directory directly to PATH.
 
-Scoop can use a custom root and can therefore be placed somewhere other than the default user profile. That makes it possible to copy or synchronize parts of a Scoop installation, but it isn't intended to be moved between computers. Shims, environment variables, configuration, cached state, architecture, credentials, and machine-specific application behavior may still need repair or reconfiguration.
+Scoop applications are described by JSON manifests. A manifest can define downloads, hashes, architecture-specific packages, dependencies, shortcuts, commands to expose through shims, update checks, and persistent data. [Buckets](https://github.com/ScoopInstaller/Scoop/wiki/Buckets) are Git repositories containing collections of those manifests, and users can add official, community, or private buckets.
 
-The important difference is that Scoop is installing and managing software in the user's Windows context, including the user's shell environment.
+Scoop's [`persist`](https://github.com/ScoopInstaller/Scoop/wiki/Persistent-data) feature keeps selected files and directories across updates by linking them to a stable per-app data directory. This preserves declared application data during package upgrades, although it does not guarantee that every application keeps all of its state inside the Scoop layout.
+
+Scoop can use a custom root and its files can be copied or synchronized, but that is not the same experience as a PortableApps collection. Its [folder layout](https://github.com/ScoopInstaller/Scoop/wiki/Scoop-Folder-Layout) includes applications, buckets, persistence data, cache, and shims under the Scoop root, while configuration normally lives under the user's profile. PATH configuration, environment variables, architecture, credentials, and application-specific behavior can still require setup on each computer.
 
 ## Comparison
 
 | Criterion | PortableApps + PortableSideloader | Scoop |
 |---|---|---|
-| Primary goal | Move and reuse an app collection | Install and maintain software in a user's Windows context |
-| Install location | PortableApps root | Scoop root, normally under the user profile |
-| Administrative access | Usually unnecessary for the app files; individual apps may still require elevation | User installs usually avoid elevation; global installs require it |
-| Update experience | PortableSideloader checks manifests/providers and swaps app folders while preserving configured data | Mature manifest-driven update flow with buckets, shims, dependencies, and version cleanup |
-| App availability | Official PortableApps catalog plus custom sideloaded sources | Very broad Scoop bucket ecosystem, including community buckets |
-| Moving to another PC | Strong when the app is genuinely portable and data is inside the collection | Possible with deliberate configuration, but not seamless by default |
-| USB/offline use | Strong, subject to drive speed and application behavior | Possible if the Scoop root is moved, but shims and configuration reduce the convenience |
-| Cloud synchronization | Natural fit for a collection, though apps must be closed before syncing | Possible, but cache, shims, configuration, and concurrent updates create more synchronization risk |
-| PATH integration | Optional and explicit; can become stale when the drive path changes | Shims provide a clean command interface, but the shim directory is machine/environment-specific |
-| Application data | Predictable for PAF apps; custom apps require preserve rules and may still write outside the folder | `persist` handles many apps, but data and configuration remain tied to the Scoop layout |
-| PortableApps menu integration | Native for PAF packages; standalone apps can be refreshed into the menu | Not a PortableApps menu system; requires separate shortcuts or menu handling |
-| Source maintenance | Custom providers and bucket manifests need maintenance | Shared Scoop manifests reduce individual maintenance for supported apps |
-| Failure modes | A “portable” app may still write to the registry, user profile, services, or require drivers | A “portable” Scoop package may still have machine-specific dependencies or installer behavior |
-| Reproducible setup | Excellent: carries the application collection together with accumulated settings and data; existing state can be either a benefit or a liability | Excellent for clean-slate provisioning through manifests, buckets, scripts, and repeatable installs |
-| Best fit | A travelable or synchronized app collection | User-context software installation and management |
+| Primary goal | Maintain a movable application collection | Install and maintain Windows software for a user |
+| Normal scope | A PortableApps directory | A Windows user profile |
+| Default location | `PortableApps\PortableApps` within the Platform directory | `%USERPROFILE%\scoop` |
+| Administrative access | Usually unnecessary, although individual apps may still require elevation | Usually unnecessary for user installs; global installs require elevation |
+| Application discovery | Official PortableApps catalog plus sideloader sources and buckets | Official, community, and private Scoop buckets |
+| Updates | PortableApps updater for official packages; PortableSideloader for managed custom apps | Manifest-driven installs and updates through Scoop |
+| Application data | Travels naturally when contained by a PAF launcher or configured preservation rules | Declared `persist` paths survive upgrades inside the Scoop layout |
+| Shell integration | Optional direct PATH entries that may need refreshing after a move | Shims and manifest-defined environment changes |
+| Menu integration | Native PortableApps menu integration | Shortcuts can be created, but there is no PortableApps-style collection menu |
+| Moving to another computer | Strong when apps and data are genuinely portable | Possible, but user configuration and shell integration may need repair |
+| USB use | A primary use case | Possible with deliberate setup, but not the default model |
+| Cloud synchronization | Natural for a closed application collection; apps should be closed before syncing | Possible with a fixed layout; avoid concurrent updates and account for profile-level configuration |
+| Reproducible setup | Reproduces a lived-in collection, including compatible settings and profiles | Reproduces a clean application set well through manifests, buckets, export/import, and scripts |
+| Best fit | Applications and data that should travel together | Applications that should be installed cleanly for each Windows user |
 
-Both systems can reproduce a working environment well, but they reproduce different things. PortableApps is especially good at reproducing an environment with its accumulated use: preferences, profiles, extensions, templates, and other preserved data travel with the collection. That is ideal when I want to continue working as though the same personal environment were present. It can be a disadvantage when I want a clean, known-default state. Scoop is stronger for that clean-slate case because the desired application set can be declared and rebuilt without carrying previous user state unless persistence is intentionally restored.
+Both approaches are reproducible, but they reproduce different things. PortableApps is good at carrying an environment with its history: preferences, profiles, extensions, templates, and other application data. Scoop is good at rebuilding a declared set of applications without carrying previous use and configuration unless that data is deliberately preserved or restored.
 
-## Advantages of PortableApps/PortableSideloader
+## Use PortableApps with PortableSideloader when
 
-### The directory is a transferable environment
+### The collection itself needs to move
 
-The main benefit is that the application files, launchers, registry of managed apps, backups, and portable data can remain together. A second Windows system can use the same collection without first installing every application into that system.
+PortableApps is the stronger choice when a directory should be copied, carried on a removable drive, or synchronized to another computer and remain useful with little additional setup. The PortableApps menu and launchers move with the applications, and compatible application data can move with them.
 
-This is especially valuable when:
+Typical examples include:
 
-- the same tools are needed on a personal and work computer;
-- software installation requires administrator approval;
-- the collection needs to run from removable storage or a synchronized folder;
-- the preferred application is not available through the official PortableApps catalog;
-- application data should travel with the application rather than remain in one user profile.
+- keeping the same GUI applications and settings on multiple computers;
+- carrying a troubleshooting or field-service toolkit on removable storage;
+- synchronizing a personal application collection through OneDrive, Nextcloud, or another file-sync service;
+- using applications on a computer where traditional installation requires administrator approval;
+- preserving configured profiles, extensions, templates, or other working data with the application.
 
-### It preserves the PortableApps user experience
+### PortableApps already contains the working environment
 
-The PortableApps menu, categories, launchers, and common root remain useful. PortableSideloader adds updates without requiring every custom application to be converted into a full PAF package.
+Replacing an established PortableApps collection with another package manager may provide little benefit if the applications and their data are already arranged correctly. PortableSideloader adds update automation to that existing layout without requiring the collection to be rebuilt around a different tool.
 
-### It is more honest about portability
+### An application is portable but missing from the official catalog
 
-PortableSideloader can preserve the actual folder and data layout rather than merely making an app easy to install. That distinction matters when the desired outcome is “copy this collection to another machine and continue working.”
+The official PortableApps updater maintains applications in its own catalog. PortableSideloader is useful when a vendor provides a suitable portable archive or executable, but no official PAF package exists. It supplies the missing version-check, download, preservation, and replacement workflow.
 
-## Disadvantages of PortableApps/PortableSideloader
+### Continuing from the same application state matters
 
-### “Portable” is not guaranteed by the archive
+PortableApps is especially useful when reproducing previous use is a benefit rather than a liability. A synchronized collection can carry the actual browser profile, editor configuration, templates, media library state, or other compatible data instead of rebuilding those settings on every computer.
 
-Some applications called portable still write to the registry, `%APPDATA%`, `%LOCALAPPDATA%`, user profile folders, credential stores, services, or system directories. PortableApps.com also warns that standalone applications outside PortableApps Format may leave data behind or lose functionality when moved.
+## Use Scoop when
 
-PortableSideloader can preserve known application paths, but it cannot make arbitrary software truly portable without application-specific launcher logic.
+### Software should be installed for the current user
 
-### Custom update rules are a maintenance obligation
+Scoop provides a concise workflow for installing, updating, and removing software without most traditional installer prompts. It is a good default when the application only needs to work for the current user and there is no requirement to carry the installed directory to another computer.
 
-When an app is not in Scoop or the PortableApps catalog, its version page, download URL, hash, and archive layout must be maintained. Vendor pages can change, mutable URLs can invalidate hashes, and some vendors block automated checks.
+### Shell integration matters more than collection portability
 
-### Path and shell integration can become stale
+Scoop's shims make command-line programs available without adding each application's installation directory to PATH. Manifests can also define aliases, environment variables, dependencies, and additional PATH entries. This is usually cleaner than maintaining direct PATH entries into a movable PortableApps directory.
 
-If the collection moves from `C:` to `D:`, absolute PATH entries, shortcuts, file associations, and other external integrations may point to the old location. PortableSideloader can add explicit paths, but external Windows state is inherently less portable than the files inside the collection.
+Git is a good example. Portable Git can be useful when it must travel with a toolkit, but a Scoop-managed Git installation is generally more convenient when Git is primarily used from PowerShell, Command Prompt, terminals, editors, and build tools on that computer.
 
-Git is a practical example: its portable distribution may use hardlinks during initialization. The destination filesystem and permissions therefore matter; portability does not remove all operating system constraints.
+### A clean, repeatable setup is preferred
 
-### The ecosystem is smaller for custom applications
+Scoop is well suited to rebuilding an application set from manifests, buckets, scripts, or its [`export` and `import` commands](https://github.com/ScoopInstaller/Scoop/wiki/Commands). This favors a known clean state. Application data can be restored separately or retained through manifest `persist` rules when appropriate.
 
-Scoop has a large collection of community-maintained manifests and established conventions for `checkver`, `autoupdate`, dependencies, persistence, and version cleanup. PortableSideloader has to build or reuse those rules through its own bucket/provider model.
+### The application already has a well-maintained Scoop manifest
 
-## Advantages of Scoop
+Using an existing Scoop manifest avoids maintaining a private version check, download URL, hash, and extraction rule. Scoop's larger manifest ecosystem is a practical advantage when collection portability is not required.
 
-### Excellent user-context installation ergonomics
+## Use both when the split is useful
 
-Scoop provides a concise workflow for installing, updating, removing, and exposing applications to the shell. It avoids many traditional installer side effects and normally operates at user scope.
+PortableApps and Scoop can coexist on the same computer. A practical division is:
 
-### Strong package-management conventions
+- PortableApps with PortableSideloader for GUI applications, portable utilities, and data that should travel with the collection.
+- Scoop for command-line tools and other applications that benefit from shims, dependencies, and user-context integration.
 
-Buckets, manifests, dependencies, versions, persistence, hashes, and update rules give Scoop a mature model for maintaining software. A private bucket also gives a clean way to add custom applications and share manifests across machines.
+This is not a requirement to divide applications by interface. A GUI application may fit Scoop better, and a command-line utility may belong in a portable field toolkit. The deciding factor is whether the application should be integrated into each Windows user environment or carried as part of the collection.
 
-### Better fit for command-line software
+## Cases where neither approach guarantees portability
 
-For tools such as Git, compilers, SDKs, command-line utilities, language runtimes, and build tools, Scoop's shims and user-context PATH management are usually more convenient than manually managing application directories. Git is a good example: a portable Git installation can travel with the collection, but the Scoop version is usually the better choice when Git is primarily a shell tool. A user's installed software can be rebuilt from a script or a list of manifests.
+Some software depends on drivers, services, shell extensions, machine certificates, hardware-specific configuration, licensed activation, or files stored outside its managed directory. Neither extracting such software into PortableApps nor installing it through Scoop removes those dependencies.
 
-### Cleaner separation from application collections
+Use a normal installer or the vendor's supported deployment method when the application requires deep Windows integration. PortableSideloader should only manage an application after its portable behavior and data locations are understood.
 
-Scoop does not require every application to appear in the PortableApps menu, and it can manage tools that are not intended to be moved with personal data.
+External integration also reduces portability. Direct PATH entries, file associations, shortcuts, protocol handlers, and credentials belong to the Windows user or machine rather than the collection. PortableSideloader can add and remove PATH entries, but they may need to be refreshed when the collection moves to another drive letter or directory.
 
-## Disadvantages of Scoop for this use case
+## Maintaining an app that is missing from PortableApps
 
-### It is not a turnkey multi-computer collection
+There are four practical options, typically ordered from least to most effort:
 
-Moving a Scoop root is possible, but the target computer may need Scoop configuration, PATH/shim repair, bucket refreshes, and application-specific setup. It is closer to reproducing an environment than carrying an environment.
-
-### It assumes a user-oriented shell environment
-
-Scoop's shims and user environment variables are intentionally integrated into one Windows user profile. That is convenient for the current Windows user, but less convenient on a USB drive, a corporate computer, or a machine where the user profile and drive letter differ.
-
-### Synchronization needs discipline
-
-Synchronizing an active Scoop root or cache can produce conflicts, partial updates, or unnecessary downloads. The same warning applies to PortableApps, but Scoop has metadata and user-environment state outside the application directories.
-
-### It does not solve portability of application data automatically
-
-Scoop’s `persist` mechanism helps keep selected files across upgrades, but it is not the same as guaranteeing that all application state is contained in a transferable collection.
-
-## Scenario results
-
-| Scenario | Preferred approach | Reason |
+| Option | Typical effort | Best fit |
 |---|---|---|
-| Rebuild a Windows user's software setup quickly | Scoop | Repeatable manifests, shims, dependencies, and updates |
-| Carry a toolbox on a USB drive | PortableApps + PortableSideloader | The root is the transferable unit and the menu travels with it |
-| Keep the same apps and settings on two PCs | PortableApps + PortableSideloader | Data and application directories can be synchronized together |
-| Keep only command-line tools current | Scoop | PATH shims and package conventions are the main benefit |
-| Use software on a locked-down work PC | PortableApps + PortableSideloader | Avoids many machine-wide installers, subject to corporate execution policy |
-| Manage apps that are not truly portable | Scoop or normal installation | PortableApps cannot remove hidden machine dependencies |
-| Maintain a private collection of GUI apps | PortableApps + private sideloader bucket | Menu integration and collection portability matter |
-| Share manifests with a team | Scoop private bucket or repository | Scoop’s manifest model is familiar and easy to script |
-| Switch often between drive letters or computers | PortableApps, with limited external integration | Keep PATH, shortcuts, and associations minimal or recreate them |
+| Maintain a private entry in `Data\apps.json` | Lowest | A personal app, licensed edition, experimental rule, or immediate local need |
+| Contribute a Scoop-compatible manifest to the PortableSideloader bucket | Low | An app useful to other PortableSideloader users or multiple installations |
+| Contribute a manifest to a Scoop bucket | Medium | An app that fits Scoop's installation model and is useful to its broader community |
+| Create and contribute a PortableApps PAF package | Highest | A genuinely portable and legally distributable app worth full PortableApps integration |
 
-## Why this led to PortableSideloader
+A local `apps.json` entry is the fastest option because there is no contribution process. Moving the entry into [PortableSideloader's included bucket](bucket/) makes it searchable and reusable while retaining PortableSideloader-specific providers and preservation behavior.
 
-This project made sense once I put the requirements together:
+Contributing to Scoop makes sense when the application is broadly useful outside PortableApps. Scoop already has conventions for [`checkver`, `autoupdate`, hashes, architecture, dependencies, shims, and persistence](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests).
 
-1. The application collection should remain inside the PortableApps directory and visible through the PortableApps menu.
-2. The collection should remain movable between supported Windows systems or usable from a synced directory.
-3. Applications outside the official PortableApps catalog should still have repeatable update rules.
-4. Application data should be preserved with the application wherever the software genuinely supports that behavior.
-5. Updates should not require a machine-wide installer or a separate package-management environment.
+Creating a proper PAF package provides the deepest PortableApps integration, but it is substantially more work. A package normally needs launcher configuration, `AppInfo` metadata, icons, installer configuration, default data, portability testing, release packaging, and continued compatibility work. PortableApps.com provides the [format, launcher, installer, template, and development resources](https://portableapps.com/development) needed for that process.
 
-PortableSideloader addresses those requirements by maintaining a local registry of apps, resolving their upstream versions, downloading and verifying new payloads, preserving configured data, and swapping the application directories in the PortableApps root.
+These options can be progressive. An application can begin as a private entry, move into the PortableSideloader bucket after it is proven, and later be contributed to Scoop or packaged for PortableApps when the broader maintenance effort is justified.
 
-This does not make every application truly portable. It preserves the collection model and gives each application an explicit place to describe its own update and preservation behavior. That is about as far as a general-purpose updater can go without writing a custom launcher for every application.
+## Why PortableSideloader exists
 
-## Relationship to Scoop
+PortableSideloader was built for an existing PortableApps collection that already contained manually sideloaded applications. The missing capability was not application installation in general; it was repeatable updates for those applications without abandoning the PortableApps layout.
 
-Scoop is not excluded by this design. Both tools can be installed on the same systems:
+It therefore focuses on a narrow gap:
 
-- PortableApps/PortableSideloader can maintain the movable application collection.
-- Scoop can install and maintain command-line utilities, SDKs, runtimes, developer tools, and other software in the current user's Windows context.
+1. Keep applications inside the PortableApps collection and visible through its menu.
+2. Retain the ability to move or synchronize the collection.
+3. Add repeatable update rules for applications outside the official catalog.
+4. Preserve application data where the software supports it.
+5. Avoid requiring every personal or niche application to become a full PAF package.
 
-The important distinction is that Scoop is not a substitute for the PortableApps collection when the collection itself is the thing that needs to move or synchronize. Conversely, PortableSideloader does not need to replace Scoop's stronger user-context installation workflow.
+PortableSideloader maintains a local app registry, resolves upstream versions, downloads and verifies payloads, preserves configured paths, and replaces application directories under the PortableApps root. It adds package-management behavior to a portable collection without claiming to replace Scoop as a general Windows installer.
 
-Regardless of the tool, avoid synchronizing an application while it is running or updating. Treat PATH entries, shortcuts, file associations, credentials, caches, and services as machine-local state unless they are deliberately recreated.
+## What about synchronizing Scoop?
 
-The practical value of PortableSideloader is that it brings manifest-driven updates to the PortableApps collection model. Scoop generally provides the cleaner user-context installation experience, but it does not remove the need for a tool that maintains a movable, synchronized PortableApps collection.
+A synchronized Scoop installation is possible, especially when each computer uses the same root path, drive letter, architecture, and user configuration. The Scoop root can include `apps`, `buckets`, `persist`, and `shims`; the download cache can either be synchronized or recreated.
 
-## Why I built PortableSideloader instead of a custom ScoopSync tool
+Each Windows user still needs the Scoop root, shim directory, and profile-level configuration set correctly. Synchronization also needs to avoid applications or Scoop updating on two computers at once. This can be manageable for a controlled personal setup, but it requires more host setup than using a PortableApps collection as the transferable unit.
 
-I also considered whether I should have built a ScoopSync-style tool instead. The starting point was practical: I already used PortableApps, I was already manually sideloading applications into it, and the missing capability was keeping those applications updated. Automating what I was already doing was the obvious next step. Replacing the collection model and building a new synchronization system around Scoop would have solved a different problem.
+The existence of that option does not make PortableSideloader unnecessary. PortableSideloader is useful when PortableApps is already the collection being maintained and the goal is to automate its missing update path. A Scoop synchronization tool would solve a related but different problem.
 
-I could not find an established, maintained Scoop synchronization project that provides the same collection-level behavior. Scoop does provide built-in `export` and `import` commands, and there are personal scripts that export app and bucket lists for reconstruction. Those are useful, but they are provisioning and rebuild tools rather than a maintained synchronized collection.
+## Conclusion
 
-The problem is not necessarily as complicated as building a complete synchronization system. If both computers use the same drive letter and directory layout, a simple tool could synchronize the Scoop root, including `apps`, `buckets`, `persist`, and `shims`. The cache could be synchronized as well, although it is not necessary because packages can be downloaded again. In that arrangement, the second computer would not need every application installed separately; it could use the synchronized application directories.
+PortableApps with PortableSideloader is the better fit when applications and compatible user data should travel together as a working collection. Scoop is the better fit when applications should be installed and integrated cleanly for each Windows user, especially when shims, dependencies, and repeatable clean setup are valuable.
 
-There would still be a small amount of per-user setup. Scoop normally keeps its configuration under the user's profile in `.config\scoop`, and the Scoop shims directory needs to be on that user's PATH. The second computer would therefore need Scoop's root path and shim path configured, either by installing Scoop once or by setting up those paths directly. The systems would also need compatible architectures and the same layout assumptions. This is much simpler than trying to synchronize arbitrary Windows environments, but it is still different from copying a PortableApps directory and expecting the collection to work without any user-profile setup.
+Neither is universally better. The deciding question is whether the durable unit should be the application collection or the Windows user environment.
 
-The main operational risk would be synchronizing while Scoop is running or while an app is being updated. The same goes for PortableApps. A shared Scoop root would also need a policy for conflicts, bucket updates, and applications that rely on machine-specific settings or installers. Those are manageable constraints for a personal setup with matching systems, but they are reasons a general-purpose ScoopSync tool would need more than a file-copy command.
-
-That is why I chose to develop PortableSideloader. PortableApps already defines the collection boundary, menu integration, and portability-oriented data conventions. PortableSideloader only needs to add the missing manifest-driven update layer for apps outside the official catalog. Scoop remains valuable on the same systems, especially for clean-slate software provisioning and command-line tools, but building a ScoopSync tool would have duplicated much of the collection and portability infrastructure that was already available through PortableApps.
-
-## Sources
+## Further reading
 
 - [PortableApps.com Platform](https://portableapps.com/)
 - [PortableApps.com Platform support and backup behavior](https://portableapps.com/support/platform)
-- [What is a Portable App?](https://portableapps.com/about/what_is_a_portable_app)
+- [What is a portable app?](https://portableapps.com/about/what_is_a_portable_app)
 - [PortableApps.com development resources](https://portableapps.com/development)
 - [PortableApps.com Format specification](https://portableapps.com/development/portableapps.com_format)
+- [PortableApps.com Format directory layout](https://portableapps.com/manuals/PortableApps.comLauncher/ref/paf/layout.html)
 - [Scoop project overview](https://github.com/ScoopInstaller/Scoop)
-- [Scoop commands, including export and import](https://github.com/ScoopInstaller/Scoop/wiki/Commands)
-- [Scoop global installs](https://github.com/ScoopInstaller/Scoop/wiki/Global-Installs)
+- [Scoop app manifests](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests)
+- [Scoop buckets](https://github.com/ScoopInstaller/Scoop/wiki/Buckets)
+- [Scoop persistent data](https://github.com/ScoopInstaller/Scoop/wiki/Persistent-data)
 - [Scoop folder layout](https://github.com/ScoopInstaller/Scoop/wiki/Scoop-Folder-Layout)
-- [Scoop FAQ](https://github.com/ScoopInstaller/Scoop/wiki/FAQ)
+- [Scoop commands, including export and import](https://github.com/ScoopInstaller/Scoop/wiki/Commands)
