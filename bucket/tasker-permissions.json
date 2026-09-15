@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "description": "Utility to easily grant Tasker and related Android apps permissions via ADB",
+  "homepage": "https://github.com/joaomgcd/Tasker-Permissions",
+  "license": "Apache-2.0",
+  "url": "https://github.com/joaomgcd/Tasker-Permissions/releases/download/v0.2.0/tasker_permissions_portable.exe",
+  "hash": "cbaf76ee717bb975ecf811ed727d5297240fed11af385e286df38b1db6607240",
+  "bin": "tasker_permissions_portable.exe",
+  "shortcuts": [
+    [
+      "tasker_permissions_portable.exe",
+      "Tasker Permissions"
+    ]
+  ],
+  "checkver": {
+    "github": "https://github.com/joaomgcd/Tasker-Permissions"
+  },
+  "x-portable-sideloader": {
+    "provider": "github",
+    "source": {
+      "repo": "joaomgcd/Tasker-Permissions",
+      "assetPattern": "^tasker_permissions_portable\\.exe$"
+    }
+  },
+  "autoupdate": {
+    "url": "https://github.com/joaomgcd/Tasker-Permissions/releases/download/v$version/tasker_permissions_portable.exe"
+  }
+}
